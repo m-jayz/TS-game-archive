@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toy Soldiers - AP + Cover</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #1a252f; color: #ecf0f1; margin: 0; padding: 12px; display: flex; flex-direction: column; align-items: center; }
+  h1 { margin: 0 0 4px; color: #f39c12; font-size: 1.4rem; }
+  .status-banner { background: #f39c12; color: #1a252f; padding: 8px 16px; border-radius: 8px; font-weight: bold; margin-bottom: 10px; text-align: center; min-width: 420px; }
+  .container { display: flex; gap: 14px; max-width: 1500px; width: 100%; }
+  .sidebar { width: 300px; background: #2c3e50; padding: 12px; border-radius: 10px; }
+  .board-container { flex: 1; background: #145a32; border: 6px solid #8b4513; border-radius: 10px; overflow: auto; }
+  #board { position: relative; height: 700px; background: #0e3d20; cursor: grab; }
+  #board.panning { cursor: grabbing; }
+  .cell { position: absolute; width: 48px; height: 48px; background: #1e8449; border: 1px solid rgba(0,0,0,0.25); box-sizing: border-box; }
+  .cell.open { background: #1e8449; } .cell.forest { background: #0e4b2a; } .cell.hill { background: #6e5b00; }
+  .cell.water { background: #1a5276; } .cell.rock { background: #5d6d7e; }
+  .cell.in-range { outline: 3px solid #e74c3c; box-shadow: inset 0 0 8px rgba(231,76,60,0.4); }
+  .cell.move-range { outline: 2px dashed #f1c40f; }
+  .cell.valid-target { background: #c0392b !important; }
+  .unit { position: absolute; width: 42px; height: 42px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 18px; z-index: 10; transform: translate(-50%, -50%); cursor: pointer; }
+  .unit.selected { border: 3px solid #f1c40f !important; box-shadow: 0 0 12px #f1c40f; animation: pulse 1.2s infinite; z-index: 30; }
+  .unit.pl1 { background: #2980b9; border: 3px solid #85c1e9; }
+  .unit.pl2 { background: #c0392b; border: 3px solid #f1948a; }
+  .unit.hit { animation: hit 0.35s; }
+  @keyframes pulse { 50% { box-shadow: 0 0 18px #f1c40f; } }
+  @keyframes hit { 50% { filter: brightness(2.5) sepia(1) hue-rotate(-40deg); transform: translate(-50%, -50%) scale(1.2); } }
+  .hp-bar { width: 34px; height: 5px; background: #222; border-radius: 2px; margin-top: 1px; overflow: hidden; }
+  .hp-fill { height: 100%; background: #27ae60; } .hp-fill.low { background: #e74c3c; }
+  button { background: #f39c12; border: none; padding: 7px; margin: 3px 0; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
+  button.ai { background: #e74c3c; color: white; }
+  button.cancel { background: #7f8c8d; }
+  .unit-btn { padding: 5px 8px; background: #1a252f; margin: 3px 0; border-radius: 5px; cursor: pointer; font-size: 14px; }
+  #log { height: 130px; overflow-y: auto; background: #1a252f; padding: 6px; font-size: 11px; border-radius: 5px; margin-top: 8px; }
+  .current-unit { background: #1a252f; padding: 8px; border-radius: 6px; margin: 6px 0; border-left: 4px solid #f1c40f; font-size: 13px; }
+  .radial-menu { position: absolute; z-index: 50; pointer-events: none; }
+  .radial-item { position: absolute; min-width: 68px; height: 26px; padding: 0 6px; background: #2c3e50; border: 2px solid #f39c12; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; cursor: pointer; pointer-events: auto; color: white; white-space: nowrap; transform: translate(-50%, -50%); }
+  .radial-item:hover { background: #f39c12; color: #1a252f; }
+</style>
+</head>
+<body>
+<h1>🪖 Toy Soldiers</h1>
+<div class="status-banner" id="banner">Buy units or Start vs AI</div>
+
+<div class="container">
+  <div class="sidebar">
+    <div>You: <b id="pm">100</b> pts &nbsp; AI: <b id="am">100</b> pts</div>
+    <div class="current-unit" id="cur">No active unit</div>
+
+    <h4 style="margin:8px 0 4px">Buy</h4>
+    <div class="unit-btn" onclick="buy('soldier',1)">🪖 Infantry (10)</div>
+    <div class="unit-btn" onclick="buy('mg',1)">🎯 MG (25)</div>
+    <div class="unit-btn" onclick="buy('tank',1)">🚜 Tank (50)</div>
+    <div class="unit-btn" onclick="buy('medic',1)">⚕️ Medic (15)</div>
+    <div class="unit-btn" onclick="buy('sniper',1)">🔫 Sniper (30)</div>
+    <div class="unit-btn" onclick="buy('scout',1)">🏃 Scout (12)</div>
+    <div class="unit-btn" onclick="buy('heavy',1)">💥 Heavy (35)</div>
+    <div class="unit-btn" onclick="buy('engineer',1)">🔧 Engineer (18)</div>
+    <button class="ai" onclick="startAI()">Start vs AI</button>
+
+    <h4 style="margin:10px 0 4px">Terrain</h4>
+    <div class="unit-btn" onclick="paint('forest')">🌲 Forest</div>
+    <div class="unit-btn" onclick="paint('hill')">⛰️ Hill</div>
+    <div class="unit-btn" onclick="paint('water')">💧 Water</div>
+    <div class="unit-btn" onclick="paint('rock')">🪨 Rock</div>
+    <div class="unit-btn" onclick="paint(null)">Stop painting</div>
+    <button onclick="randomTerrain()">Random Terrain</button>
+
+    <button id="cancelBtn" class="cancel" style="display:none; background:#e67e22; font-size:16px;" onclick="cancelAttack()">✖ Cancel Attack</button>
+    <button onclick="skip()">Skip this unit</button>
+    <button onclick="newRound()">New Round</button>
+    <button onclick="location.reload()" style="background:#27ae60;">🔄 Restart Game</button>
+    <div id="log"></div>
+  </div>
+  <div class="board-container"><div id="board"></div></div>
+</div>
+
+<script>
+const CELL = 50;
+const COLS = 14, ROWS = 10;
+
+let units = [], cur = null, queue = [], uid = 0, paintMode = null, terr = {}, cells = [];
+let pm = 100, am = 100, aiOn = false, radial = null, attackMode = false, isGren = false, isAimed = false, healMode = false, healAmt = 0;
+
+const types = {
+  soldier: { n: 'Infantry', i: '🪖', mv: 4, rg: 5, at: '1d6', df: 3, hp: 4, c: 10, gr: 1, ap: 4 },
+  mg: { n: 'MG', i: '🎯', mv: 2, rg: 8, at: '2d6', df: 4, hp: 6, c: 25, ap: 3 },
+  tank: { n: 'Tank', i: '🚜', mv: 5, rg: 6, at: '3d6', df: 6, hp: 10, c: 50, sp: 1, ap: 5 },
+  medic: { n: 'Medic', i: '⚕️', mv: 3, rg: 3, at: '1d6', df: 3, hp: 5, c: 15, ap: 4, heal: true },
+  sniper: { n: 'Sniper', i: '🔫', mv: 3, rg: 10, at: '2d6', df: 2, hp: 3, c: 30, ap: 3 },
+  scout: { n: 'Scout', i: '🏃', mv: 6, rg: 4, at: '1d6', df: 3, hp: 3, c: 12, ap: 5 },
+  heavy: { n: 'Heavy', i: '💥', mv: 3, rg: 4, at: '3d6', df: 5, hp: 8, c: 35, ap: 3, gr: 1 },
+  engineer: { n: 'Engineer', i: '🔧', mv: 3, rg: 4, at: '1d6', df: 4, hp: 5, c: 18, ap: 4 }
+};
+const fx = { open: { m: 1, b: 0, c: 0, i: 0 }, forest: { m: 2, b: 1, c: 25, i: 0 }, hill: { m: 1, b: 0, c: 15, i: 0 }, water: { m: 99, b: 0, c: 0, i: 1 }, rock: { m: 99, b: 1, c: 0, i: 1 } };
+
+const k = (x, y) => x + ',' + y;
+const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+
+function px(x, y) {
+  return { x: x * CELL + CELL / 2 + 20, y: y * CELL + CELL / 2 + 20 };
+}
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(type) {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.connect(g); g.connect(audioCtx.destination);
+  if (type === 'hit') { o.frequency.value = 180; g.gain.setValueAtTime(0.15, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15); o.start(); o.stop(audioCtx.currentTime + 0.15); }
+  else if (type === 'miss') { o.frequency.value = 90; g.gain.setValueAtTime(0.08, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1); o.start(); o.stop(audioCtx.currentTime + 0.1); }
+  else if (type === 'move') { o.frequency.value = 440; g.gain.setValueAtTime(0.06, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08); o.start(); o.stop(audioCtx.currentTime + 0.08); }
+  else if (type === 'buy') { o.frequency.value = 660; g.gain.setValueAtTime(0.1, audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12); o.start(); o.stop(audioCtx.currentTime + 0.12); }
+}
+
+let panX = 0, panY = 0, isPanning = false, panStartX = 0, panStartY = 0;
+
+function applyPan() {
+  const b = document.getElementById('board');
+  b.style.transform = `translate(${panX}px, ${panY}px)`;
+}
+
+function init() {
+  const b = document.getElementById('board'); b.innerHTML = ''; cells = [];
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const p = px(x, y);
+    const c = document.createElement('div');
+    c.className = 'cell open';
+    c.style.left = (p.x - CELL / 2) + 'px';
+    c.style.top = (p.y - CELL / 2) + 'px';
+    c.dataset.x = x; c.dataset.y = y;
+    c.onclick = () => clickCell(x, y);
+    b.appendChild(c);
+    cells.push({ x, y, el: c });
+    terr[k(x, y)] = 'open';
+  }
+  // Pan handlers
+  b.onmousedown = e => {
+    if (e.target === b || e.target.classList.contains('cell')) {
+      isPanning = true;
+      panStartX = e.clientX - panX;
+      panStartY = e.clientY - panY;
+      b.classList.add('panning');
+    }
+  };
+  window.onmousemove = e => {
+    if (!isPanning) return;
+    panX = e.clientX - panStartX;
+    panY = e.clientY - panStartY;
+    applyPan();
+  };
+  window.onmouseup = () => {
+    isPanning = false;
+    document.getElementById('board').classList.remove('panning');
+  };
+  render(); setBanner('Buy units or Start vs AI');
+}
+function setBanner(t) { document.getElementById('banner').textContent = t; }
+function paint(m) { paintMode = m; setBanner(m ? 'Painting ' + m : 'Paint off'); }
+function randomTerrain() {
+  cells.forEach(c => {
+    const r = Math.random();
+    let t = 'open';
+    if (r < 0.16) t = 'forest';
+    else if (r < 0.26) t = 'hill';
+    else if (r < 0.32) t = 'water';
+    else if (r < 0.36) t = 'rock';
+    terr[k(c.x, c.y)] = t;
+    c.el.className = 'cell ' + t;
+  });
+  log('Random terrain generated');
+  playSound('buy');
+}
+function clickCell(x, y) {
+  if (paintMode) {
+    terr[k(x, y)] = paintMode;
+    const c = cells.find(z => z.x === x && z.y === y);
+    if (c) c.el.className = 'cell ' + paintMode;
+    return;
+  }
+  if (cur && cur.pl === 1 && cur.ap >= 1 && !attackMode) {
+    const cost = 1; // 1 AP per square for free reposition style
+    if (dist(cur, { x, y }) <= 2 && !imp(x, y) && !units.some(u => u.x === x && u.y === y) && cur.ap >= cost) {
+      cur.x = x; cur.y = y; cur.ap -= cost;
+      log(cur.n + ' repositions (1 AP, ' + cur.ap + ' left)'); playSound('move'); 
+      render(); ui(); showRadial(); 
+      setBanner(cur.n + ' — AP ' + cur.ap + ' left');
+    }
+  }
+}
+function buy(type, pl) {
+  const t = types[type];
+  if (!t) return;
+  if (pl === 1 && pm < t.c) { log('Not enough points'); return; }
+  if (pl === 2 && am < t.c) return;
+  let x = pl === 1 ? 1 : COLS - 2, y = 2;
+  let placed = false;
+  for (let i = 0; i < ROWS * 2; i++) {
+    if (!units.some(u => u.x === x && u.y === y) && !imp(x, y)) { placed = true; break; }
+    y = (y + 1) % ROWS;
+    if (y === 0) x = pl === 1 ? Math.min(x + 1, 2) : Math.max(x - 1, COLS - 3);
+  }
+  if (!placed) { log('No free space to deploy'); return; }
+  if (pl === 1) pm -= t.c; else am -= t.c;
+  units.push({ id: uid++, ty: type, pl, n: t.n, i: t.i, x, y, mv: t.mv, rg: t.rg, at: t.at, df: t.df, hp: t.hp, mx: t.hp, gr: t.gr || 0, sp: !!t.sp, ap: t.ap, maxAp: t.ap, st: null, aim: 0, critBonus: 0 });
+  playSound('buy');
+  ui();
+  render();
+  log('Bought ' + t.n);
+  if (units.length && !cur) rebuild();
+}
+function imp(x, y) { return fx[terr[k(x, y)] || 'open'].i; }
+function coverPercent(u) {
+  let cover = fx[terr[k(u.x, u.y)] || 'open'].c || 0;
+  // adjacent cover
+  [[0,1],[1,0],[0,-1],[-1,0]].forEach(([dx,dy]) => {
+    const t = terr[k(u.x + dx, u.y + dy)] || 'open';
+    if (fx[t].c) cover += Math.floor(fx[t].c / 2);
+  });
+  return Math.min(cover, 50);
+}
+function rebuild() {
+  const a = units.filter(u => u.pl === 1), b = units.filter(u => u.pl === 2);
+  queue = [];
+  for (let i = 0; i < Math.max(a.length, b.length); i++) { if (a[i]) queue.push(a[i]); if (b[i]) queue.push(b[i]); }
+  next();
+}
+function next() {
+  hideR(); attackMode = false;
+  document.getElementById('cancelBtn').style.display = 'none';
+  cur = queue.find(u => units.includes(u) && u.ap > 0) || null;
+  if (cur) {
+    log('→ ' + cur.n + ' (' + (cur.pl === 1 ? 'YOU' : 'AI') + ') AP:' + cur.ap);
+    if (cur.pl === 2 && aiOn) setTimeout(aiDo, 300);
+    else { showRadial(); setBanner(cur.n + ' — AP ' + cur.ap + ' (menu or click nearby to reposition)'); }
+  } else setBanner('Round finished — New Round');
+  ui(); render();
+}
+function render() {
+  document.querySelectorAll('.unit').forEach(e => e.remove());
+  const b = document.getElementById('board');
+  units.forEach(u => {
+    const p = px(u.x, u.y);
+    const el = document.createElement('div');
+    el.className = 'unit pl' + u.pl + (cur && cur.id === u.id ? ' selected' : '');
+    el.dataset.id = u.id;
+    el.innerHTML = u.i + '<div class="hp-bar"><div class="hp-fill' + (u.hp <= u.mx / 3 ? ' low' : '') + '" style="width:' + (u.hp / u.mx * 100) + '%"></div></div>';
+    el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+    el.draggable = cur && cur.id === u.id && u.pl === 1 && !attackMode;
+    el.ondragstart = e => e.dataTransfer.setData('id', u.id);
+    el.onclick = e => { e.stopPropagation(); onUnitClick(u); };
+    b.appendChild(el);
+  });
+  highlight();
+}
+function highlight() {
+  cells.forEach(c => c.el.classList.remove('in-range', 'move-range', 'valid-target'));
+  if (!cur) return;
+  cells.forEach(c => {
+    const dd = dist(cur, c);
+    if (dd > 0 && dd <= cur.rg) c.el.classList.add('in-range');
+    if (dd > 0 && dd <= 2 && !imp(c.x, c.y)) c.el.classList.add('move-range'); // free reposition radius
+  });
+  if (attackMode) {
+    if (isGren) {
+      // highlight full grenade damage radius
+      cells.forEach(c => {
+        if (dist(cur, c) <= 2) c.el.classList.add('valid-target');
+      });
+    } else {
+      units.filter(u => u.pl !== cur.pl && dist(cur, u) <= cur.rg && hasLOS(cur, u))
+        .forEach(u => { const c = cells.find(z => z.x === u.x && z.y === u.y); if (c) c.el.classList.add('valid-target'); });
+    }
+  }
+}
+document.getElementById('board').ondragover = e => e.preventDefault();
+document.getElementById('board').ondrop = e => {
+  e.preventDefault();
+  if (!cur || cur.pl !== 1 || attackMode || cur.ap < 1) return;
+  const rct = document.getElementById('board').getBoundingClientRect();
+  const mx = e.clientX - rct.left, my = e.clientY - rct.top;
+  let best = null, bd = 999;
+  cells.forEach(c => { const p = px(c.x, c.y); const dd = Math.hypot(p.x - mx, p.y - my); if (dd < bd && dd < 30) { bd = dd; best = c; } });
+  if (!best) return;
+  if (dist(cur, best) > 2 || imp(best.x, best.y) || units.some(u => u.x === best.x && u.y === best.y && u.id !== cur.id)) { log('Too far or blocked'); return; }
+  cur.x = best.x; cur.y = best.y; cur.ap -= 1;
+  log(cur.n + ' repositions (' + cur.ap + ' AP left)'); playSound('move'); 
+  render(); ui(); showRadial();
+  setBanner(cur.n + ' — AP ' + cur.ap + ' left');
+};
+function showRadial() {
+  hideR();
+  if (!cur || cur.pl !== 1) return;
+  const p = px(cur.x, cur.y);
+  radial = document.createElement('div');
+  radial.className = 'radial-menu';
+  radial.style.left = p.x + 'px'; radial.style.top = p.y + 'px';
+  const acts = [
+    { l: '⚔️ Attack (2AP)', f: () => beginAttack(0, false) },
+    { l: '🎯 Aimed (3AP)', f: () => beginAttack(0, true) },
+    { l: '🛡️ Defend (ends turn)', f: () => stance('defend') },
+    { l: '👁️ Overwatch (ends turn)', f: () => stance('overwatch') }
+  ];
+  if (cur.gr > 0) acts.push({ l: '💣 Grenade (2AP)', f: () => beginAttack(1, false) });
+  if (cur.ty === 'medic') {
+    acts.push({ l: '🩹 Heal 1 (1AP)', f: () => beginHeal(1) });
+    acts.push({ l: '🩹 Heal 2 (2AP)', f: () => beginHeal(2) });
+    acts.push({ l: '🩹 Full Heal (3AP)', f: () => beginHeal(99) });
+  }
+  acts.forEach((a, i) => {
+    const it = document.createElement('div');
+    it.className = 'radial-item'; it.textContent = a.l;
+    const ang = (i / acts.length) * Math.PI * 2 - Math.PI / 2;
+    // Larger radius when there are more buttons so they don't overlap
+    const radius = Math.max(110, 28 * acts.length);
+    it.style.left = Math.cos(ang) * radius + 'px';
+    it.style.top = Math.sin(ang) * radius + 'px';
+    it.onclick = e => { e.stopPropagation(); e.preventDefault(); a.f(); };
+    radial.appendChild(it);
+  });
+  document.getElementById('board').appendChild(radial);
+}
+function hideR() { if (radial) { radial.remove(); radial = null; } }
+function stance(s) {
+  const cost = s === 'defend' ? 1 : 2;
+  if (!cur || cur.ap < cost) { log('Not enough AP'); return; }
+  cur.ap = 0; // these actions end the unit's turn
+  cur.st = s;
+  if (s === 'aim') { cur.aim = 1; cur.critBonus = 0.25; }
+  if (s === 'overwatch') log(cur.n + ' sets OVERWATCH — will react if an enemy moves into range');
+  else log(cur.n + ' uses ' + s + ' (ends turn)');
+  ui();
+  setTimeout(next, 150);
+}
+function beginAttack(gren, aimed) {
+  const cost = aimed ? 3 : 2;
+  if (cur.ap < cost) { log('Not enough AP'); return; }
+  attackMode = true; isGren = gren; isAimed = aimed;
+  hideR();
+  setBanner((aimed ? 'AIMED SHOT' : gren ? 'GRENADE' : 'ATTACK') + ' — click red enemy or Cancel');
+  document.getElementById('cancelBtn').style.display = 'block';
+  highlight();
+}
+function beginHeal(amt) {
+  const cost = amt === 1 ? 1 : amt === 2 ? 2 : 3;
+  if (!cur || cur.ap < cost) { log('Not enough AP'); return; }
+  healMode = true; healAmt = amt; attackMode = false;
+  hideR();
+  setBanner('HEAL — click a friendly unit (or Cancel)');
+  document.getElementById('cancelBtn').style.display = 'block';
+  highlight();
+}
+function doHeal(target) {
+  const cost = healAmt === 1 ? 1 : healAmt === 2 ? 2 : 3;
+  if (cur.ap < cost) return;
+  cur.ap -= cost;
+  const heal = healAmt === 99 ? (target.mx - target.hp) : Math.min(healAmt, target.mx - target.hp);
+  target.hp = Math.min(target.mx, target.hp + heal);
+  log(cur.n + ' heals ' + target.n + ' for ' + heal + ' HP');
+  playSound('buy');
+  healMode = false;
+  document.getElementById('cancelBtn').style.display = 'none';
+  ui(); render();
+  if (cur.ap <= 0) setTimeout(next, 200); else showRadial();
+}
+function cancelAttack() {
+  attackMode = false; isGren = false; isAimed = false; healMode = false;
+  document.getElementById('cancelBtn').style.display = 'none';
+  setBanner(cur.n + ' — AP ' + cur.ap);
+  showRadial();
+  highlight();
+}
+function onUnitClick(u) {
+  if (healMode && cur && u.pl === cur.pl) {
+    doHeal(u);
+    return;
+  }
+  if (!attackMode || !cur || u.pl === cur.pl) return;
+  const maxR = isGren ? 2 : cur.rg;
+  if (dist(cur, u) > maxR || (!isGren && !hasLOS(cur, u))) {
+    log('Out of range or blocked');
+    return;
+  }
+  const cost = isAimed ? 3 : 2;
+  if (cur.ap < cost) { log('Not enough AP'); return; }
+  cur.ap -= cost;
+  document.getElementById('cancelBtn').style.display = 'none';
+  doAttack(cur, u, isGren, isAimed);
+  attackMode = false; isAimed = false;
+}
+function doAttack(a, t, gren, aimed) {
+  let rolls = parse(a.at);
+  if (aimed) rolls = rolls.map(r => Math.min(6, r + 1)); // higher hit chance
+  if (a.aim) rolls.push(1 + Math.floor(Math.random() * 6));
+  const tot = rolls.reduce((x, y) => x + y, 0);
+  const cover = coverPercent(t);
+  const defB = t.st === 'defend' ? 2 : 0;
+  const need = t.df + Math.floor(cover / 5) + defB; // cover reduces effective
+  const hit = tot >= need;
+  log(`${a.n} ${aimed?'🎯':gren?'💣':'⚔️'} ${t.n} [${rolls.join(',')}] = ${tot} vs ${need} (cover ${cover}%) → ${hit?'HIT':'MISS'}`);
+  playSound(hit ? 'hit' : 'miss');
+  if (hit) {
+    t.hp -= gren ? 2 : 1;
+    const el = document.querySelector(`.unit[data-id="${t.id}"]`);
+    if (el) { el.classList.add('hit'); setTimeout(() => el.classList.remove('hit'), 350); }
+    if (gren) {
+      // splash damage to nearby enemies
+      units.filter(u => u.pl !== a.pl && dist(t, u) <= 1 && u.id !== t.id).forEach(s => {
+        s.hp--;
+        log('Grenade splash on ' + s.n);
+        if (s.hp <= 0) units = units.filter(x => x.id !== s.id);
+      });
+    }
+    if (t.hp <= 0) {
+      units = units.filter(x => x.id !== t.id);
+      log(t.n + ' destroyed');
+      if (!units.filter(u => u.pl !== a.pl).length) {
+        setBanner(a.pl === 1 ? '🎉 YOU WIN! 🎉' : 'You lose');
+        log(a.pl === 1 ? 'Victory!' : 'Defeat.');
+        showWinScreen(a.pl === 1);
+        return;
+      }
+    } else log(t.n + ' HP ' + t.hp);
+    const critChance = 0.3 + (a.critBonus || 0);
+    if (!gren && Math.random() < critChance) {
+      log('CRIT!');
+      a.critBonus = 0;
+      const nxt = units.find(u => u.pl !== a.pl && dist(a, u) <= a.rg && hasLOS(a, u));
+      if (nxt && a.ap >= 2) { a.ap -= 2; setTimeout(() => doAttack(a, nxt, 0, false), 350); }
+    }
+  }
+  if (gren) a.gr--;
+  if (a.pl === 2 || a.ap <= 0) {
+    setTimeout(next, 250);
+  } else {
+    showRadial();
+    ui();
+    setBanner(a.n + ' — AP ' + a.ap + ' left');
+  }
+}
+function parse(s) { const m = s.match(/(\d+)d(\d+)/); if (!m) return [1 + Math.floor(Math.random() * 6)]; const a = []; for (let i = 0; i < +m[1]; i++) a.push(1 + Math.floor(Math.random() * +m[2])); return a; }
+function hasLOS(a, b) {
+  let x0 = a.x, y0 = a.y, x1 = b.x, y1 = b.y;
+  const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx - dy;
+  while (x0 !== x1 || y0 !== y1) {
+    const e2 = 2 * err;
+    if (e2 > -dy) { err -= dy; x0 += sx; }
+    if (e2 < dx) { err += dx; y0 += sy; }
+    if (x0 === x1 && y0 === y1) break;
+    if (fx[terr[k(x0, y0)] || 'open'].b) return false;
+  }
+  return true;
+}
+function checkOverwatch(mover) {
+  if (!mover || mover.pl === 1) return; // only react to enemy moves for now
+  const watchers = units.filter(u => u.pl === 1 && u.st === 'overwatch' && u.ap > 0);
+  for (const w of watchers) {
+    if (dist(w, mover) <= w.rg && hasLOS(w, mover)) {
+      log(w.n + ' OVERWATCH reacts!');
+      w.st = null; // one reaction
+      doAttack(w, mover, false, false);
+      break; // one reaction per move
+    }
+  }
+}
+function newRound() {
+  units.forEach(u => { u.ap = u.maxAp; if (u.st !== 'overwatch') u.st = null; });
+  if (!units.some(u => u.pl === 1)) {
+    setBanner('Buy some units first');
+    return;
+  }
+  rebuild();
+  log('Battle started / new round');
+  setBanner('Your turn');
+}
+function ui() {
+  document.getElementById('pm').textContent = pm;
+  document.getElementById('am').textContent = am;
+  const c = document.getElementById('cur');
+  if (cur) c.innerHTML = `<b>${cur.i} ${cur.n}</b> (${cur.pl === 1 ? 'YOU' : 'AI'})<br>HP ${cur.hp}/${cur.mx} · AP ${cur.ap}/${cur.maxAp} · Cover ${coverPercent(cur)}%`;
+  else c.textContent = 'Round over';
+}
+function startAI() {
+  aiOn = true;
+  pm = am = 100;
+  units = [];
+  cur = null;
+  const ov = document.getElementById('winOverlay');
+  if (ov) ov.style.display = 'none';
+  // Clear spawn columns
+  for (let y = 0; y < ROWS; y++) {
+    terr[k(1, y)] = 'open';
+    terr[k(COLS - 2, y)] = 'open';
+    const c1 = cells.find(c => c.x === 1 && c.y === y);
+    const c2 = cells.find(c => c.x === COLS - 2 && c.y === y);
+    if (c1) c1.el.className = 'cell open';
+    if (c2) c2.el.className = 'cell open';
+  }
+  ui();
+  setBanner('Buy your units, then press New Round to start');
+  log('vs AI ready — buy units then New Round');
+  aiBuy();
+  render();
+}
+function skip() {
+  if (!cur) { log('No active unit'); return; }
+  cur.ap = 0;
+  log(cur.n + ' skipped');
+  next();
+}
+function aiBuy() {
+  const prefs = [
+    { t: 'soldier', w: 4 }, { t: 'mg', w: 2 }, { t: 'tank', w: 1 },
+    { t: 'medic', w: 2 }, { t: 'sniper', w: 2 }, { t: 'scout', w: 2 },
+    { t: 'heavy', w: 1 }, { t: 'engineer', w: 1 }
+  ];
+  let s = 0;
+  while (am >= 10 && s++ < 10) {
+    const aff = prefs.filter(p => types[p.t].c <= am);
+    if (!aff.length) break;
+    let tot = aff.reduce((a, p) => a + p.w, 0), r = Math.random() * tot, ch = aff[0].t;
+    for (const p of aff) { r -= p.w; if (r <= 0) { ch = p.t; break; } }
+    buy(ch, 2);
+  }
+}
+function aiDo() {
+  if (!cur || cur.pl !== 2) { setTimeout(next, 100); return; }
+  const ens = units.filter(u => u.pl === 1);
+  const allies = units.filter(u => u.pl === 2 && u.id !== cur.id);
+  if (!ens.length) {
+    if (units.some(u => u.pl === 1)) setBanner('You lose');
+    return;
+  }
+
+  // Medic prioritizes healing hurt allies
+  if (cur.ty === 'medic' && cur.ap >= 1) {
+    const hurt = allies.filter(a => a.hp < a.mx).sort((a, b) => (a.hp / a.mx) - (b.hp / b.mx));
+    if (hurt.length) {
+      const target = hurt[0];
+      const amt = cur.ap >= 3 && target.hp <= target.mx / 2 ? 99 : cur.ap >= 2 ? 2 : 1;
+      const cost = amt === 99 ? 3 : amt;
+      if (cur.ap >= cost && dist(cur, target) <= 2) {
+        cur.ap -= cost;
+        const heal = amt === 99 ? (target.mx - target.hp) : Math.min(amt, target.mx - target.hp);
+        target.hp = Math.min(target.mx, target.hp + heal);
+        log(cur.n + ' heals ' + target.n + ' for ' + heal);
+        playSound('buy');
+        render();
+        setTimeout(next, 300);
+        return;
+      }
+    }
+  }
+
+  // Prefer attacking low-HP or high-value targets
+  if (cur.ap >= 2) {
+    const tgts = ens.filter(e => dist(cur, e) <= cur.rg && hasLOS(cur, e));
+    if (tgts.length) {
+      tgts.sort((a, b) => (a.hp / a.mx) - (b.hp / b.mx) || a.hp - b.hp);
+      cur.ap = 0;
+      doAttack(cur, tgts[0], false, cur.ty === 'sniper'); // snipers aim
+      return;
+    }
+  }
+
+  // Seek cover or close distance
+  if (cur.ap >= 1) {
+    let near = ens[0], md = dist(cur, near);
+    ens.forEach(e => { const dd = dist(cur, e); if (dd < md) { md = dd; near = e; } });
+    let best = null, bestScore = -999;
+    cells.forEach(c => {
+      if (imp(c.x, c.y) || units.some(u => u.x === c.x && u.y === c.y && u.id !== cur.id)) return;
+      const dh = dist(cur, c);
+      if (dh > 2 || dh === 0) return;
+      const distScore = -dist(c, near); // closer is better
+      const coverScore = coverPercent({ x: c.x, y: c.y }) * 0.5;
+      const score = distScore + coverScore;
+      if (score > bestScore) { bestScore = score; best = c; }
+    });
+    if (best) {
+      cur.x = best.x; cur.y = best.y;
+      log(cur.n + ' repositions (tactical)');
+      playSound('move');
+      render();
+      checkOverwatch(cur);
+    }
+  }
+
+  // Sometimes set overwatch if no good attack
+  if (cur.ap >= 2 && Math.random() < 0.4 && cur.ty !== 'medic') {
+    cur.st = 'overwatch';
+    log(cur.n + ' sets OVERWATCH');
+  }
+
+  cur.ap = 0;
+  setTimeout(next, 300);
+}
+function showWinScreen(won) {
+  let overlay = document.getElementById('winOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'winOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:999;';
+    overlay.innerHTML = `<div style="background:#2c3e50;padding:24px;border-radius:12px;text-align:center;border:3px solid #f39c12;">
+      <h2 id="winTitle" style="margin:0 0 12px;color:#f39c12;"></h2>
+      <button onclick="location.reload()" style="background:#27ae60;padding:12px 24px;font-size:16px;">🔄 Restart</button>
+    </div>`;
+    document.body.appendChild(overlay);
+  }
+  document.getElementById('winTitle').textContent = won ? '🎉 YOU WIN! 🎉' : '💀 You Lose';
+  overlay.style.display = 'flex';
+}
+function log(m) {
+  const l = document.getElementById('log');
+  if (l) { l.innerHTML += m + '<br>'; l.scrollTop = l.scrollHeight; }
+}
+init();
+</script>
+</body>
+</html>

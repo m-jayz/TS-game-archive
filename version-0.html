@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Toy Soldiers Tabletop</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #2c3e50;
+    color: #ecf0f1;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  h1 {
+    margin: 0 0 10px 0;
+    color: #f39c12;
+    text-shadow: 2px 2px 4px #000;
+  }
+  .container {
+    display: flex;
+    gap: 20px;
+    max-width: 1400px;
+    width: 100%;
+  }
+  .sidebar {
+    width: 280px;
+    background: #34495e;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  }
+  .board-container {
+    flex: 1;
+    background: #27ae60;
+    border: 8px solid #8b4513;
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+  }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(12, 50px);
+    grid-template-rows: repeat(12, 50px);
+    gap: 2px;
+    background: #1e8449;
+    padding: 10px;
+    position: relative;
+  }
+  .cell {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(0,0,0,0.2);
+    position: relative;
+  }
+  .cell.highlight {
+    background: rgba(255,255,0,0.4);
+  }
+  .cell.in-range {
+    background: rgba(255,0,0,0.3);
+  }
+  .unit {
+    position: absolute;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    cursor: grab;
+    border: 3px solid #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    user-select: none;
+    z-index: 10;
+    transition: transform 0.1s;
+  }
+  .unit:active {
+    cursor: grabbing;
+    transform: scale(1.1);
+    z-index: 100;
+  }
+  .unit.selected {
+    border-color: #f1c40f;
+    box-shadow: 0 0 10px #f1c40f;
+  }
+  .unit.player1 { background: #3498db; }
+  .unit.player2 { background: #e74c3c; }
+  .stats {
+    background: #2c3e50;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
+    font-size: 14px;
+  }
+  button {
+    background: #f39c12;
+    color: #2c3e50;
+    border: none;
+    padding: 8px 12px;
+    margin: 5px 0;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    width: 100%;
+  }
+  button:hover {
+    background: #e67e22;
+  }
+  .unit-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 5px 0;
+    padding: 5px;
+    background: #2c3e50;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  .unit-btn:hover {
+    background: #1a252f;
+  }
+  #log {
+    height: 150px;
+    overflow-y: auto;
+    background: #1a252f;
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    margin-top: 10px;
+  }
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin: 10px 0;
+  }
+  .dice-result {
+    font-size: 24px;
+    text-align: center;
+    margin: 10px 0;
+    color: #f1c40f;
+  }
+</style>
+</head>
+<body>
+<h1>🪖 Toy Soldiers Tabletop</h1>
+<p>Old-school wargame: drag units, check ranges, roll for battle!</p>
+
+<div class="container">
+  <div class="sidebar">
+    <h3>Add Units</h3>
+    <div class="unit-btn" onclick="addUnit('soldier', 1)">🪖 Infantry (P1)</div>
+    <div class="unit-btn" onclick="addUnit('mg', 1)">🎯 Machine Gun (P1)</div>
+    <div class="unit-btn" onclick="addUnit('tank', 1)">🚜 Tank (P1)</div>
+    <div class="unit-btn" onclick="addUnit('soldier', 2)">🪖 Infantry (P2)</div>
+    <div class="unit-btn" onclick="addUnit('mg', 2)">🎯 Machine Gun (P2)</div>
+    <div class="unit-btn" onclick="addUnit('tank', 2)">🚜 Tank (P2)</div>
+
+    <h3>Selected Unit</h3>
+    <div id="stats" class="stats">Click a unit to see stats</div>
+
+    <div class="controls">
+      <button onclick="endTurn()">End Turn</button>
+      <button onclick="rollDice(6)">Roll d6</button>
+    </div>
+    <div id="dice" class="dice-result">🎲</div>
+
+    <h3>Battle Log</h3>
+    <div id="log"></div>
+
+    <button onclick="saveGame()">Save Game</button>
+    <button onclick="loadGame()">Load Game</button>
+    <button onclick="clearBoard()">Clear Board</button>
+  </div>
+
+  <div class="board-container">
+    <div id="board"></div>
+  </div>
+</div>
+
+<script>
+const GRID_SIZE = 12;
+const CELL_SIZE = 50;
+let units = [];
+let selectedUnit = null;
+let currentPlayer = 1;
+let unitIdCounter = 0;
+
+const unitTypes = {
+  soldier: { name: 'Infantry', icon: '🪖', move: 4, range: 5, attack: '1d6', defense: 3, hp: 4 },
+  mg: { name: 'Machine Gun', icon: '🎯', move: 2, range: 8, attack: '2d6', defense: 4, hp: 6 },
+  tank: { name: 'Tank', icon: '🚜', move: 5, range: 6, attack: '3d6', defense: 6, hp: 10 }
+};
+
+function initBoard() {
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.x = x;
+      cell.dataset.y = y;
+      board.appendChild(cell);
+    }
+  }
+  renderUnits();
+}
+
+function addUnit(type, player) {
+  const def = unitTypes[type];
+  const unit = {
+    id: unitIdCounter++,
+    type,
+    player,
+    name: def.name + ' ' + (player === 1 ? 'Blue' : 'Red'),
+    icon: def.icon,
+    x: player === 1 ? 1 : GRID_SIZE - 2,
+    y: Math.floor(Math.random() * (GRID_SIZE - 2)) + 1,
+    move: def.move,
+    range: def.range,
+    attack: def.attack,
+    defense: def.defense,
+    hp: def.hp,
+    maxHp: def.hp,
+    moved: false
+  };
+  units.push(unit);
+  renderUnits();
+  log(`Added ${unit.name}`);
+}
+
+function renderUnits() {
+  // Clear existing unit elements
+  document.querySelectorAll('.unit').forEach(el => el.remove());
+  const board = document.getElementById('board');
+  units.forEach(unit => {
+    const el = document.createElement('div');
+    el.className = `unit player${unit.player}`;
+    el.textContent = unit.icon;
+    el.dataset.id = unit.id;
+    el.style.left = (unit.x * (CELL_SIZE + 2) + 10) + 'px';
+    el.style.top = (unit.y * (CELL_SIZE + 2) + 10) + 'px';
+    el.draggable = true;
+    el.addEventListener('dragstart', onDragStart);
+    el.addEventListener('click', () => selectUnit(unit.id));
+    board.appendChild(el);
+  });
+  highlightPossible();
+}
+
+function onDragStart(e) {
+  e.dataTransfer.setData('text/plain', e.target.dataset.id);
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+document.getElementById('board').addEventListener('dragover', (e) => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+});
+
+document.getElementById('board').addEventListener('drop', (e) => {
+  e.preventDefault();
+  const id = parseInt(e.dataTransfer.getData('text/plain'));
+  const unit = units.find(u => u.id === id);
+  if (!unit || unit.player !== currentPlayer) return;
+
+  const rect = document.getElementById('board').getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left - 10) / (CELL_SIZE + 2));
+  const y = Math.floor((e.clientY - rect.top - 10) / (CELL_SIZE + 2));
+
+  if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return;
+
+  // Check occupancy
+  if (units.some(u => u.id !== id && u.x === x && u.y === y)) {
+    log('Cell occupied!');
+    return;
+  }
+
+  // Simple movement check (ignore for now, or add distance)
+  const dist = Math.abs(unit.x - x) + Math.abs(unit.y - y);
+  if (dist > unit.move) {
+    log(`Too far! Movement is ${unit.move}`);
+    return;
+  }
+
+  unit.x = x;
+  unit.y = y;
+  unit.moved = true;
+  renderUnits();
+  log(`${unit.name} moved to (${x},${y})`);
+});
+
+function selectUnit(id) {
+  selectedUnit = units.find(u => u.id === id);
+  document.querySelectorAll('.unit').forEach(el => el.classList.remove('selected'));
+  const el = document.querySelector(`[data-id="${id}"]`);
+  if (el) el.classList.add('selected');
+  updateStats();
+  highlightPossible();
+}
+
+function updateStats() {
+  const stats = document.getElementById('stats');
+  if (!selectedUnit) {
+    stats.innerHTML = 'Click a unit to see stats';
+    return;
+  }
+  const u = selectedUnit;
+  stats.innerHTML = `
+    <strong>${u.name}</strong><br>
+    HP: ${u.hp}/${u.maxHp}<br>
+    Move: ${u.move} | Range: ${u.range}<br>
+    Attack: ${u.attack} | Defense: ${u.defense}<br>
+    Player: ${u.player}<br>
+    <button onclick="attack()">Attack Target</button>
+  `;
+}
+
+function highlightPossible() {
+  document.querySelectorAll('.cell').forEach(c => {
+    c.classList.remove('highlight', 'in-range');
+  });
+  if (!selectedUnit) return;
+  // Movement highlight
+  for (let y = 0; y < GRID_SIZE; y++) {
+    for (let x = 0; x < GRID_SIZE; x++) {
+      const dist = Math.abs(selectedUnit.x - x) + Math.abs(selectedUnit.y - y);
+      if (dist <= selectedUnit.move && dist > 0) {
+        const cell = document.querySelector(`[data-x="${x}"][data-y="${y}"]`);
+        if (cell && !units.some(u => u.x === x && u.y === y)) {
+          cell.classList.add('highlight');
+        }
+      }
+      if (dist <= selectedUnit.range && dist > 0) {
+        const cell = document.querySelector(`[data-x="${x}"][data-y="${y}"]`);
+        if (cell) cell.classList.add('in-range');
+      }
+    }
+  }
+}
+
+function attack() {
+  if (!selectedUnit) return;
+  // For simplicity, prompt for target or click another unit
+  const targets = units.filter(u => u.player !== selectedUnit.player);
+  if (targets.length === 0) {
+    log('No enemies!');
+    return;
+  }
+  // Find nearest or let user click - for now, attack closest in range
+  let target = null;
+  let minDist = Infinity;
+  targets.forEach(t => {
+    const dist = Math.abs(selectedUnit.x - t.x) + Math.abs(selectedUnit.y - t.y);
+    if (dist <= selectedUnit.range && dist < minDist) {
+      minDist = dist;
+      target = t;
+    }
+  });
+  if (!target) {
+    log('No target in range!');
+    return;
+  }
+  resolveAttack(selectedUnit, target);
+}
+
+function resolveAttack(attacker, defender) {
+  const rolls = parseAttack(attacker.attack);
+  const total = rolls.reduce((a, b) => a + b, 0);
+  const hit = total >= defender.defense;
+  log(`${attacker.name} attacks ${defender.name} with ${attacker.attack} = [${rolls.join(', ')}] total ${total} vs Def ${defender.defense} → ${hit ? 'HIT!' : 'MISS'}`);
+  if (hit) {
+    defender.hp -= 1;
+    if (defender.hp <= 0) {
+      units = units.filter(u => u.id !== defender.id);
+      log(`${defender.name} destroyed!`);
+    } else {
+      log(`${defender.name} takes 1 damage, HP ${defender.hp}`);
+    }
+  }
+  renderUnits();
+  if (selectedUnit && selectedUnit.id === attacker.id) updateStats();
+}
+
+function parseAttack(str) {
+  // e.g. "2d6" or "1d6"
+  const match = str.match(/(\d+)d(\d+)/);
+  if (!match) return [rollDie(6)];
+  const num = parseInt(match[1]);
+  const sides = parseInt(match[2]);
+  const rolls = [];
+  for (let i = 0; i < num; i++) rolls.push(rollDie(sides));
+  return rolls;
+}
+
+function rollDie(sides) {
+  return Math.floor(Math.random() * sides) + 1;
+}
+
+function rollDice(sides) {
+  const result = rollDie(sides);
+  document.getElementById('dice').textContent = `🎲 ${result}`;
+  log(`Rolled d${sides}: ${result}`);
+}
+
+function endTurn() {
+  currentPlayer = currentPlayer === 1 ? 2 : 1;
+  units.forEach(u => u.moved = false);
+  log(`--- Turn ends. Now Player ${currentPlayer}'s turn ---`);
+  selectedUnit = null;
+  updateStats();
+  renderUnits();
+}
+
+function log(msg) {
+  const logEl = document.getElementById('log');
+  logEl.innerHTML += msg + '<br>';
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function saveGame() {
+  localStorage.setItem('toySoldiers', JSON.stringify({ units, currentPlayer, unitIdCounter }));
+  log('Game saved!');
+}
+
+function loadGame() {
+  const data = localStorage.getItem('toySoldiers');
+  if (data) {
+    const parsed = JSON.parse(data);
+    units = parsed.units;
+    currentPlayer = parsed.currentPlayer;
+    unitIdCounter = parsed.unitIdCounter;
+    renderUnits();
+    log('Game loaded!');
+  }
+}
+
+function clearBoard() {
+  if (confirm('Clear all units?')) {
+    units = [];
+    selectedUnit = null;
+    renderUnits();
+    updateStats();
+    log('Board cleared');
+  }
+}
+
+// Init
+initBoard();
+log('Welcome to Toy Soldiers Tabletop! Add units and start battling.');
+log('Drag units to move (respect movement). Select and Attack.');
+</script>
+</body>
+</html>

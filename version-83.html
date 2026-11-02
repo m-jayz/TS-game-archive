@@ -1,0 +1,3378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1d2417">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Toy Soldiers - AP + Cover</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Comic Sans MS', 'Marker Felt', cursive, sans-serif; background: #f5f0e1; color: #222; margin: 0; padding: 4px 4px 48px 4px; display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+  h1 { margin: 0; font-size: 1.1rem; text-align: center; }
+  .status-banner { background: #fff; border: 2px solid #333; padding: 3px 8px; margin: 2px auto; font-size: 11px; text-align: center; max-width: 500px; }
+  .container { display: flex; gap: 6px; flex: 1; min-height: 0; width: 100%; }
+  .sidebar { width: 220px; background: #fffef8; border: 2px solid #333; padding: 4px; overflow-y: auto; font-size: 11px; }
+  .board-container { flex: 1; background: #2e3b26; border: 2px solid #333; overflow: hidden; position: relative; min-height: 0; }
+  #board { position: relative; width: 100%; height: 100%; cursor: grab; }
+  #log { height: 70px; overflow-y: auto; background: #fff; border: 1px solid #333; font-size: 10px; padding: 2px; margin-top: 4px; font-family: monospace; }
+  button, .unit-btn { font-size: 11px; padding: 2px 4px; margin: 1px 0; width: 100%; border: 1px solid #333; background: #fff; cursor: pointer; }
+  .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fffef8; border-top: 2px solid #333; padding: 4px 4px calc(4px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; z-index: 100; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .bottom-bar button { width: auto; min-width: 70px; padding: 4px 6px; font-size: 11px; }
+  .bottom-bar button.end-turn { background: #f39c12; animation: pulseBtn 1s infinite; }
+  @keyframes pulseBtn { 50% { background: #f5b041; } }
+  .cell { position: absolute; width: 42px; height: 42px; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.10); }
+  .cell.in-range { outline: 2px solid #c0392b; outline-offset: -2px; }
+  .cell.move-range { outline: 2px dashed #fff; outline-offset: -3px; }
+  .cell.move-range::before { content: ''; position: absolute; inset: 0; background: rgba(255,255,255,0.22); z-index: 2; pointer-events: none; }
+  .cell.valid-target::before { content: ''; position: absolute; inset: 0; background: rgba(192,57,43,0.5); z-index: 2; pointer-events: none; }
+  .tsvg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: hidden; }
+  #mapBorder { position: absolute; border: 6px solid #6b4f2a; border-radius: 6px; box-shadow: 0 0 0 2px #3d2c14, 4px 6px 14px rgba(0,0,0,.5); pointer-events: none; z-index: 1; }
+  .unit { position: absolute; width: 36px; height: 36px; transform: translate(-50%, -50%); cursor: pointer; z-index: 10; --c: #3f8fd6; --d: #174a7c; }
+  .unit.pl2 { --c: #e0645a; --d: #8e1f18; }
+  .unit.selected .sprite { filter: drop-shadow(0 0 3px #f1c40f) drop-shadow(0 0 6px #f1c40f); }
+  .unit.selected { z-index: 30; }
+  .sprite { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; transition: transform .25s ease; pointer-events: none; }
+  .sprite svg { display: block; overflow: visible; filter: drop-shadow(1px 2px 1.5px rgba(0,0,0,.45)); }
+  .hp-bar { position: absolute; left: 3px; bottom: -7px; width: 30px; height: 4px; background: #ddd; border: 1px solid #222; border-radius: 2px; overflow: hidden; }
+  .hp-fill { height: 100%; background: #27ae60; }
+  .hp-fill.low { background: #c0392b; }
+  .unit.hit { animation: hitflash .35s; }
+  @keyframes hitflash { 50% { filter: brightness(2) drop-shadow(0 0 6px red); } }
+  #board.animate { transition: transform .45s ease; }
+  .cell.fog::after { content: ''; position: absolute; inset: 0; background: rgba(20,26,40,0.58); pointer-events: none; z-index: 3; }
+  .ghost { position: absolute; width: 36px; height: 36px; transform: translate(-50%, -50%); opacity: .55; z-index: 9; pointer-events: none; --c: #b9b9b9; --d: #555; }
+  .ghost .q { position: absolute; top: -8px; right: -4px; font-size: 16px; font-weight: bold; color: #922b21; }
+  .ghost .gl { position: absolute; bottom: -9px; left: 0; right: 0; text-align: center; font-size: 9px; color: #444; }
+  .status-banner.turn-you { background: #fff3c4; border-color: #d68910; font-weight: bold; font-size: 13px; animation: bannerPulse 1s infinite; }
+  .status-banner.turn-ai { background: #fadbd8; border-color: #922b21; }
+  @keyframes bannerPulse { 50% { box-shadow: 0 0 0 5px rgba(243,156,18,.5); } }
+  #turnFlash { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 500; }
+  #turnFlash span { display: flex; flex-direction: column; align-items: center; text-align: center; line-height: 1.05; font-size: clamp(30px, 7vw, 72px); font-weight: bold; padding: 10px 40px 12px; border: 5px solid #333; border-radius: 12px; background: #f1c40f; color: #222; box-shadow: 5px 5px 0 #333; animation: turnPop 1.3s ease-out forwards; }
+  #turnFlash small { font-size: .42em; letter-spacing: .22em; opacity: .8; margin-bottom: 2px; }
+  #turnFlash.enemy span { background: #c0392b; color: #fff; }
+  @keyframes turnPop { 0% { opacity: 0; transform: scale(.4); } 15% { opacity: 1; transform: scale(1.1); } 25% { transform: scale(1); } 80% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.05); } }
+  .toast { position: absolute; left: 50%; transform: translateX(-50%); background: #2c3e50; color: #fff; padding: 5px 14px; border-radius: 16px; font-size: 12px; z-index: 450; pointer-events: none; animation: toastIn 1.8s ease-out forwards; }
+  @keyframes toastIn { 0% { opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+  #setupBar { display: none; position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); width: auto; padding: 10px 22px; font-size: 15px; font-weight: bold; background: #27ae60; color: #fff; border: 3px solid #1e8449; border-radius: 10px; z-index: 300; animation: pulseBtn 1s infinite; box-shadow: 3px 3px 0 #333; }
+  .ul-row { display: flex; align-items: center; gap: 4px; padding: 2px 3px; border: 1px solid transparent; border-radius: 4px; cursor: pointer; }
+  .ul-row:hover { background: #f4ecd0; }
+  .ul-row.active { background: #fff3c4; border-color: #d68910; font-weight: bold; }
+  .ul-row.done { opacity: .55; }
+  .ul-row.enemy { color: #922b21; }
+  .ul-hp { margin-left: auto; font-size: 10px; white-space: nowrap; }
+  .ul-ap { font-size: 8px; letter-spacing: -1px; color: #d68910; }
+  .sz { width: auto; padding: 5px 14px; font-size: 13px; border-radius: 6px; }
+  .sz.active { background: #f1c40f; font-weight: bold; }
+  .opt-row { display: flex; align-items: center; gap: 4px; margin: 2px 0; font-size: 11px; }
+
+  /* ===== Field-kit theme ===== */
+  body { font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif; background: #1d2417; color: #eee8cf; }
+  h1 { color: #eee8cf; letter-spacing: .24em; text-transform: uppercase; font-size: 1.05rem; text-shadow: 0 2px 0 #0d110a; margin: 2px 0; }
+  .status-banner { background: #2b3322; color: #eee8cf; border: 2px solid #0d110a; border-radius: 999px; padding: 3px 18px; font-weight: 600; }
+  .status-banner.turn-you { background: #f1c40f; color: #2a2200; border-color: #8a6a00; }
+  .status-banner.turn-ai { background: #8e1f18; color: #fff; border-color: #4f0f0b; }
+  .tm1 { --c: #3f8fd6; --d: #174a7c; }
+  .tm2 { --c: #e0645a; --d: #8e1f18; }
+  button, .unit-btn { font: 600 11px/1.2 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif; padding: 6px 8px; margin: 2px 0; width: 100%; border: 1px solid #11150d; border-radius: 7px; background: linear-gradient(#e9e2c0, #cdc38f); color: #2b2a1a; cursor: pointer; box-shadow: 0 2px 0 #11150d; transition: filter .15s, transform .05s; }
+  button:hover:not(:disabled) { filter: brightness(1.07); }
+  button:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 #11150d; }
+  button:disabled { opacity: .38; cursor: not-allowed; }
+  .bottom-bar { background: #2b3322; border-top: 2px solid #0d110a; }
+  .bottom-bar button.end-turn { background: linear-gradient(#f7b84a, #e08a14); }
+  #setupBar { background: linear-gradient(#3fbf63, #1f8f43); border-color: #14602d; animation: setupPulse 1.3s infinite; }
+  @keyframes setupPulse { 0%, 100% { box-shadow: 3px 3px 0 #333, 0 0 0 0 rgba(63,191,99,.55); } 50% { box-shadow: 3px 3px 0 #333, 0 0 0 9px rgba(63,191,99,0); } }
+  .sz.active { background: linear-gradient(#f7d45a, #e1b53a); color: #2a2200; }
+  .board-container { border: 2px solid #0d110a; border-radius: 10px; }
+  .modal-box { background: linear-gradient(#323c27, #262d1e); color: #eee8cf; padding: 22px 28px; border: 3px solid #6b4f2a; border-radius: 14px; text-align: center; max-width: 400px; box-shadow: 0 12px 40px rgba(0,0,0,.65); }
+  .modal-box h3 { margin: 0 0 10px; font-size: 20px; letter-spacing: .16em; text-transform: uppercase; }
+
+  .sidebar { width: 264px; padding: 0; background: linear-gradient(#2d3624, #252c1d); border: 2px solid #0d110a; border-radius: 10px; color: #eee8cf; font-size: 12px; scrollbar-width: thin; scrollbar-color: #5d6a4a #252c1d; }
+  .sb-head { position: sticky; top: 0; z-index: 5; padding: 8px 8px 8px; background: #2b3322; border-bottom: 1px solid #11150d; box-shadow: 0 4px 10px rgba(0,0,0,.35); }
+  .sb-body { padding: 4px 8px 10px; }
+  .score { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .sc { border-radius: 8px; padding: 5px 9px; display: flex; align-items: baseline; gap: 6px; border: 1px solid #11150d; color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.2); }
+  .sc span { font-size: 10px; font-weight: 800; letter-spacing: .14em; }
+  .sc b { font-size: 21px; line-height: 1; }
+  .sc b i { font-style: normal; }
+  .sc em { font-style: normal; font-size: 10px; opacity: .85; }
+  .sc.you { background: linear-gradient(#3b86c4, #25608f); }
+  .sc.ai { background: linear-gradient(#c2554a, #8e3028); }
+  .current-unit { margin-top: 8px; background: #343e2a; border: 1px solid #11150d; border-radius: 8px; padding: 8px; min-height: 40px; }
+  .current-unit.empty { color: #a9b08f; text-align: center; font-style: italic; padding: 11px 8px; }
+  .uc { display: grid; grid-template-columns: 50px 1fr; gap: 4px 9px; }
+  .uc-art { width: 50px; height: 50px; border-radius: 9px; background: radial-gradient(circle, #b3c985, #86a05f); display: flex; align-items: center; justify-content: center; border: 1px solid #11150d; }
+  .uc-art svg { width: 42px; height: 42px; overflow: visible; filter: drop-shadow(1px 2px 1.5px rgba(0,0,0,.45)); }
+  .uc-name { font-weight: 800; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .uc-tag { font-size: 9px; font-weight: 800; padding: 1px 7px; border-radius: 9px; letter-spacing: .08em; color: #fff; background: var(--c); }
+  .bar { position: relative; height: 14px; border-radius: 7px; background: #11150d; overflow: hidden; margin: 5px 0 4px; }
+  .bar i { display: block; height: 100%; background: linear-gradient(#5fcb74, #2f9a47); transition: width .25s; }
+  .bar i.low { background: linear-gradient(#e8695e, #b13a30); }
+  .bar b { position: absolute; inset: 0; text-align: center; font-size: 10px; line-height: 14px; color: #fff; text-shadow: 0 1px 1px #000; }
+  .uc-ap { display: flex; align-items: center; gap: 3px; font-size: 10px; color: #cfc9a8; }
+  .uc-ap span { margin-left: 5px; }
+  .pip { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid #e1b53a; background: transparent; }
+  .pip.on { background: #e1b53a; }
+  .uc-stats { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 10.5px; color: #cfc9a8; border-top: 1px solid #11150d; padding-top: 6px; margin-top: 3px; }
+  .uc-chips { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px; }
+  .uc-chips em { font-style: normal; font-size: 10px; background: #11150d; border-radius: 9px; padding: 1px 8px; color: #e1b53a; }
+
+  .guide { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .guide li { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px; background: #2f382a; color: #a9b08f; font-size: 11px; }
+  .guide li b { width: 18px; height: 18px; border-radius: 50%; background: #11150d; display: flex; align-items: center; justify-content: center; font-size: 10px; flex: none; }
+  .guide li.now { background: #4a4421; color: #fff3c4; box-shadow: inset 0 0 0 1px #e1b53a; }
+  .guide li.now b { background: #e1b53a; color: #2a2200; }
+  .guide li.done { color: #8fd18f; }
+  .guide li.done b { background: #2f9a47; color: #fff; }
+
+  .card { background: #343e2a; border: 1px solid #11150d; border-radius: 9px; margin: 9px 0; }
+  .card > summary { cursor: pointer; padding: 8px 10px; font-weight: 800; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #e1b53a; list-style: none; display: flex; align-items: center; gap: 6px; user-select: none; }
+  .card > summary::-webkit-details-marker { display: none; }
+  .card > summary::after { content: '▸'; margin-left: auto; color: #8a9470; transition: transform .15s; }
+  .card[open] > summary::after { transform: rotate(90deg); }
+  .card > summary .hint { font-weight: 400; letter-spacing: 0; text-transform: none; color: #8a9470; font-size: 10px; }
+  .card > .inner { padding: 0 9px 9px; }
+  .shop { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .shop-card { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 4px 6px; margin: 0; width: auto; background: linear-gradient(#3f4b34, #333d2a); color: #eee8cf; border: 1px solid #11150d; box-shadow: none; }
+  .shop-card:hover:not(.locked) { background: linear-gradient(#4d5e3f, #3b4830); }
+  .sc-art { width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle, #b3c985, #86a05f); display: flex; align-items: center; justify-content: center; border: 1px solid #11150d; }
+  .sc-art svg { width: 36px; height: 36px; overflow: visible; filter: drop-shadow(1px 1px 1px rgba(0,0,0,.4)); }
+  .sc-name { font-size: 11px; font-weight: 700; text-align: center; line-height: 1.1; }
+  .sc-cost { font-size: 10px; background: #11150d; color: #e1b53a; border-radius: 9px; padding: 1px 9px; }
+  .shop-card.poor { opacity: .45; }
+  .shop-card.locked { opacity: .55; filter: grayscale(.7); }
+  .shop-card.locked .sc-cost { color: #ff9a8a; }
+
+  .cmds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 10px 0 2px; }
+  #cancelBtn { background: linear-gradient(#f5a05a, #d9782b); color: #fff; font-size: 13px; margin-top: 8px; }
+  button.restart { background: linear-gradient(#78c67c, #3f9a4a); color: #fff; margin-top: 10px; }
+  .sec { margin: 12px 0 5px; font-weight: 800; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #e1b53a; display: flex; align-items: center; gap: 6px; }
+  .sec em { font-style: normal; background: #11150d; color: #cfc9a8; border-radius: 9px; padding: 0 8px; letter-spacing: 0; font-weight: 600; }
+  .empty-note { color: #8a9470; font-style: italic; font-size: 11px; padding: 3px 4px; }
+  .ul-row { display: grid; grid-template-columns: 28px 1fr auto; grid-template-rows: auto auto; gap: 1px 7px; align-items: center; padding: 4px 6px; margin: 2px 0; border: 1px solid transparent; border-radius: 8px; cursor: pointer; background: #2f382a; color: #eee8cf; }
+  .ul-row:hover { background: #3b4732; }
+  .ul-row.active { background: #4a4421; border-color: #e1b53a; }
+  .ul-row.done { opacity: .5; }
+  .ul-ico { grid-row: 1 / 3; width: 28px; height: 28px; border-radius: 50%; background: radial-gradient(circle, #b3c985, #86a05f); display: flex; align-items: center; justify-content: center; }
+  .ul-ico svg { width: 23px; height: 23px; overflow: visible; }
+  .ul-name { font-weight: 700; font-size: 11.5px; }
+  .ul-hp { font-size: 10px; color: #cfc9a8; text-align: right; }
+  .ul-bar { height: 5px; border-radius: 3px; background: #11150d; overflow: hidden; }
+  .ul-bar i { display: block; height: 100%; background: #3fb458; }
+  .ul-bar i.low { background: #d9534f; }
+  .mini-pips { font-size: 7px; letter-spacing: -1px; color: #e1b53a; text-align: right; }
+  .mini-pips s { text-decoration: none; opacity: .25; }
+  .ul-row.tm2 .ul-name { color: #ffb0a6; }
+
+  #log { height: 128px; overflow-y: auto; background: #12170e; color: #b9d8a0; border: 1px solid #0a0d07; border-radius: 8px; font: 10.5px/1.45 Consolas, 'Courier New', monospace; padding: 6px 8px; margin: 0; scrollbar-width: thin; scrollbar-color: #4a5a3a #12170e; }
+  #log .ll { border-bottom: 1px dotted rgba(255,255,255,.06); padding: 1px 0; }
+  #log .ll.hit { color: #ffd37a; }
+  #log .ll.kill { color: #ff8f7a; font-weight: bold; }
+  #log .ll.miss { color: #8fa3bd; }
+  #log .ll.sys { color: #9fc4ee; }
+
+  .tog { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 2px; cursor: pointer; font-size: 11.5px; }
+  .tog input { display: none; }
+  .tog i { position: relative; flex: none; width: 32px; height: 17px; border-radius: 9px; background: #556048; transition: background .15s; }
+  .tog i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #d8d2b4; transition: left .15s; }
+  .tog input:checked + i { background: #5fa835; }
+  .tog input:checked + i::after { left: 17px; background: #fff; }
+  .tog input:disabled + i { opacity: .35; }
+  .set-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 2px; font-size: 11.5px; }
+  .card input[type=range] { accent-color: #e1b53a; width: 100%; margin: 2px 0 6px; }
+  #optSpeed { background: #11150d; color: #eee8cf; border: 1px solid #556048; border-radius: 6px; padding: 3px 6px; font-size: 11px; }
+  .tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+  .tool { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 2px; margin: 0; width: auto; font-size: 9.5px; }
+  .tool span { font-size: 17px; line-height: 1.1; }
+  .tool.active { outline: 2px solid #e1b53a; background: linear-gradient(#f6e9a8, #e4cf74); }
+
+  /* ===== tooltips, radial menu, mines, shelling, worn cover ===== */
+  .tip-dark { background: rgba(14,18,10,.96); color: #f6f1d9; border: 1px solid #e1b53a; border-radius: 9px; padding: 7px 11px; font: 12.5px/1.4 'Trebuchet MS','Segoe UI',system-ui,sans-serif; box-shadow: 0 6px 18px rgba(0,0,0,.55); max-width: 280px; }
+  .tip-dark.small { padding: 4px 8px; font-size: 11.5px; border-radius: 7px; }
+  .tip-dark b { color: #fff; }
+  .tp-sep { height: 1px; background: #3c4630; margin: 6px 0 5px; }
+  .tp-row { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: baseline; }
+  .tp-row.dim { opacity: .45; }
+  .tp-row small { color: #a9b08f; }
+  .tp-row b.good { color: #7ee08a; } .tp-row b.mid { color: #ffd166; } .tp-row b.bad { color: #ff8a7a; }
+  .tp-note { margin-top: 4px; font-size: 10.5px; color: #b9bfa0; }
+  .tp-bad { color: #ff9a8a; }
+  .radial-item { position: absolute; transform: translate(-50%,-50%); background: linear-gradient(#f1ead0, #d6cc98); color: #23220f; border: 2px solid #11150d; border-radius: 16px; padding: 4px 11px; font: 700 12px 'Trebuchet MS','Segoe UI',system-ui,sans-serif; cursor: pointer; pointer-events: auto; white-space: nowrap; box-shadow: 0 3px 8px rgba(0,0,0,.5); }
+  .radial-item:hover { background: linear-gradient(#fff6c8, #f1d96b); }
+  .mine { position: absolute; width: 22px; height: 22px; transform: translate(-50%,-50%); z-index: 6; pointer-events: none; opacity: .9; filter: drop-shadow(1px 1px 1px rgba(0,0,0,.5)); }
+  .shellzone { position: absolute; width: 42px; height: 42px; background: rgba(224,70,50,.30); border: 2px dashed #ff6a4d; z-index: 7; pointer-events: none; animation: shellPulse 1.1s infinite; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  @keyframes shellPulse { 50% { background: rgba(224,70,50,.5); } }
+  .cell.worn { box-shadow: inset 0 0 14px rgba(50,25,0,.5); }
+  .cell.worn2 { box-shadow: inset 0 0 22px rgba(30,12,0,.75); }
+
+  /* ===== map creator, save/load ===== */
+  .tools { grid-template-columns: repeat(5, 1fr); }
+  .io-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+  #creatorBar { display: none; position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 400; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: center; background: #2b3322; border: 2px solid #0d110a; border-radius: 12px; padding: 6px 8px; max-width: 96%; box-shadow: 0 6px 18px rgba(0,0,0,.5); }
+  #creatorBar button { width: auto; padding: 5px 10px; margin: 0; }
+  #creatorBar input { background: #11150d; color: #eee8cf; border: 1px solid #556048; border-radius: 6px; padding: 5px 8px; width: 120px; font: 12px 'Trebuchet MS', system-ui, sans-serif; }
+  #creatorBar .go { background: linear-gradient(#3fbf63, #1f8f43); color: #fff; }
+  .zone { position: absolute; z-index: 5; pointer-events: none; display: flex; align-items: flex-start; justify-content: center; }
+  .zone span { margin-top: 4px; font: 700 10px 'Trebuchet MS', system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #fff; text-shadow: 0 1px 2px #000; }
+  .zone.blue { background: rgba(63,143,214,.28); border-right: 2px dashed #7ec3ff; }
+  .zone.red { background: rgba(224,100,90,.28); border-left: 2px dashed #ff9a8a; }
+  .slot-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; background: #2f382a; border: 1px solid #11150d; border-radius: 8px; padding: 7px 10px; margin: 6px 0; font-size: 12.5px; }
+  .slot-row b { display: block; }
+  .slot-row small { color: #a9b08f; }
+  .slot-row .btns { display: flex; gap: 6px; flex: none; }
+  .slot-row button { width: auto; padding: 5px 10px; margin: 0; }
+
+  /* ===== objectives, flanking wedge, 2-AP moves ===== */
+  .objzone { position: absolute; width: 42px; height: 42px; z-index: 6; pointer-events: none; background: rgba(241,196,15,.22); border: 2px dashed #f1c40f; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .flagmark { position: absolute; width: 26px; height: 30px; z-index: 14; pointer-events: none; filter: drop-shadow(1px 2px 1px rgba(0,0,0,.6)); }
+  .flagmark.home { opacity: .35; }
+  .wedge { position: absolute; z-index: 8; pointer-events: none; }
+  .cell.move-range2 { outline: 2px dotted rgba(255,255,255,.85); outline-offset: -3px; }
+  .cell.move-range2::before { content: ''; position: absolute; inset: 0; background: rgba(255,255,255,.10); z-index: 2; pointer-events: none; }
+  .obj-row { display: grid; grid-template-columns: 34px 1fr; gap: 6px; align-items: center; font-size: 11px; }
+  .obj-row .bar { margin: 3px 0; }
+  #objCard b.t { font-size: 12px; color: #e1b53a; }
+
+  /* ===== mobile / touch layout ===== */
+  .board-container { touch-action: none; }
+  .mob { display: none; }
+  #optLayout { background: #11150d; color: #eee8cf; border: 1px solid #556048; border-radius: 6px; padding: 3px 6px; font-size: 11px; }
+  #cancelBtn { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: auto; margin: 0; padding: 9px 20px; font-size: 14px; z-index: 450; box-shadow: 0 4px 12px rgba(0,0,0,.5); }
+  #scrim { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 850; }
+  #edgeSwipe { display: none; position: fixed; left: 0; top: 70px; bottom: 80px; width: 18px; z-index: 40; touch-action: none; }
+  #mobHud { display: none; position: absolute; inset: 0; pointer-events: none; z-index: 420; }
+  #mobHud > * { pointer-events: auto; }
+  .hud-btn { width: 46px; height: 46px; border-radius: 50%; padding: 0; margin: 0; font-size: 20px; line-height: 1; background: rgba(43,51,34,.94); color: #eee8cf; border: 2px solid #0d110a; box-shadow: 0 3px 8px rgba(0,0,0,.5); }
+  #hudMenu { position: absolute; left: 10px; top: 10px; }
+  #hudCol { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  #mobChip { position: absolute; left: 64px; right: 66px; top: 10px; height: 46px; z-index: 420; align-items: center; gap: 6px; padding: 0 6px; background: rgba(43,51,34,.94); border: 2px solid #0d110a; border-radius: 23px; box-shadow: 0 3px 8px rgba(0,0,0,.5); color: #eee8cf; }
+  .chip-nav { width: 30px; height: 30px; border-radius: 50%; padding: 0; margin: 0; flex: none; font-size: 12px; }
+  .chip-ico { width: 32px; height: 32px; flex: none; border-radius: 50%; background: radial-gradient(circle, #b3c985, #86a05f); display: flex; align-items: center; justify-content: center; }
+  .chip-ico svg { width: 26px; height: 26px; overflow: visible; }
+  .chip-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 1; }
+  .chip-main b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip-bar { display: block; height: 6px; border-radius: 3px; background: #11150d; overflow: hidden; }
+  .chip-bar i { display: block; height: 100%; background: #3fb458; }
+  .chip-ap { font-size: 9px; color: #e1b53a; letter-spacing: -1px; flex: none; }
+  .chip-ap s { text-decoration: none; opacity: .25; }
+  .chip-note { font-size: 12px; color: #cfc9a8; padding-left: 8px; }
+  .drawer-x { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border-radius: 50%; padding: 0; margin: 0; z-index: 6; align-items: center; justify-content: center; }
+
+  body.mobile { overscroll-behavior: none; touch-action: manipulation; padding-top: calc(4px + env(safe-area-inset-top, 0px)); -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+  body.mobile h1 { display: none; }
+  body.mobile .status-banner { margin: 2px auto 4px; font-size: 12px; padding: 2px 14px; }
+  body.mobile .mob { display: flex; }
+  body.mobile #mobHud { display: block; }
+  body.mobile #edgeSwipe { display: block; }
+  body.mobile.creator #mobChip { display: none; }
+  body.mobile #cancelBtn { top: 64px; }
+  body.mobile #creatorBar { top: 64px; }
+  body.mobile .board-container { border-radius: 8px; }
+  body.mobile .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: min(88vw, 340px); z-index: 900; border-radius: 0 14px 14px 0; transform: translateX(-104%); transition: transform .25s ease; padding-top: env(safe-area-inset-top, 0px); overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; box-shadow: none; }
+  body.mobile.drawer-open .sidebar { transform: none; box-shadow: 8px 0 28px rgba(0,0,0,.65); }
+  body.mobile.drawer-open #scrim { display: block; }
+  body.mobile .sb-head { padding-right: 52px; }
+  body.mobile .sidebar button, body.mobile .sidebar select { min-height: 40px; }
+  body.mobile .tog { padding: 9px 2px; }
+  body.mobile .shop-card { padding: 9px 4px 8px; }
+  body.mobile .ul-row { padding: 7px 8px; }
+  body.mobile .modal-box { max-width: 92vw; max-height: 88vh; overflow-y: auto; padding: 18px 16px; }
+  body.mobile .bottom-bar { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; gap: 6px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  body.mobile .bottom-bar::-webkit-scrollbar { display: none; }
+  body.mobile .bottom-bar button { flex: none; min-width: 68px; height: 54px; font-size: 11px; line-height: 1.15; padding: 4px 8px; white-space: normal; margin: 0; }
+  body.mobile .bottom-bar button#btnEnd { position: sticky; right: 0; }
+  body.mobile [data-na="1"] { display: none !important; }
+  body.mobile .toast { top: 72px !important; }
+</style>
+</head>
+<body>
+<h1>🪖 Toy Soldiers</h1>
+<div class="status-banner" id="banner">Welcome to Toy Soldiers</div>
+
+<div class="container">
+  <div class="sidebar">
+    <div class="sb-head">
+      <button class="mob drawer-x" onclick="closeDrawer()" aria-label="Close menu">✕</button>
+      <div class="score">
+        <div class="sc you"><span>YOU</span><b><i id="pm">100</i></b><em>pts</em></div>
+        <div class="sc ai"><span>AI</span><b><i id="am">100</i></b><em>pts</em></div>
+      </div>
+      <div class="current-unit empty" id="cur">No active unit</div>
+    </div>
+    <div class="sb-body">
+      <div id="objCard" class="card" style="display:none"></div>
+
+      <ol id="setupGuide" class="guide">
+        <li data-s="1" class="now"><b>1</b> Deploy your squad below</li>
+        <li data-s="2"><b>2</b> Press <u>Start Battle</u> on the map</li>
+      </ol>
+
+      <details id="shopBox" class="card" open>
+        <summary>🪖 Deploy <span class="hint">click a unit to buy it</span></summary>
+        <div class="inner"><div class="shop" id="shop"></div></div>
+      </details>
+
+      <div class="cmds">
+        <button onclick="skipUnit()">⏭ Skip unit</button>
+        <button onclick="newRound()">🔁 New round</button>
+      </div>
+
+      <div id="unitList"></div>
+
+      <div class="sec">Battle log</div>
+      <div id="log"></div>
+
+      <details id="saveBox" class="card">
+        <summary>💾 Save &amp; load</summary>
+        <div class="inner">
+          <div class="io-grid" style="margin-top:0">
+            <button onclick="showSaveDialog()">💾 Save game</button>
+            <button onclick="showLoadDialog()">📂 Load game</button>
+            <button onclick="exportSave()">⬇ Export save</button>
+            <button onclick="importAny()">⬆ Import file</button>
+          </div>
+          <div class="empty-note">Autosaves at the start of each of your turns.</div>
+        </div>
+      </details>
+
+      <details id="settingsBox" class="card">
+        <summary>⚙️ Settings</summary>
+        <div class="inner">
+          <label class="tog"><span>🎵 Music</span><input type="checkbox" id="musicOn" checked onchange="toggleMusic()"><i></i></label>
+          <input type="range" id="musicVol" min="0" max="100" value="40" oninput="setMusicVol(this.value)" title="Music volume">
+          <label class="tog" title="You only see what your units can see"><span>🌫️ Fog of war</span><input type="checkbox" id="optFog" checked onchange="onOptChange()"><i></i></label>
+          <label class="tog" title="Faded markers where enemies were last seen"><span>👻 Last-known enemy spots</span><input type="checkbox" id="optGhost" checked onchange="onOptChange()"><i></i></label>
+          <label class="tog" title="The AI only knows what its units can see"><span>🤖 AI plays under fog</span><input type="checkbox" id="optAIFog" checked><i></i></label>
+          <label class="tog" title="Zoom to the active unit each turn"><span>🎥 Auto-camera</span><input type="checkbox" id="optCam" checked><i></i></label>
+          <label class="tog" title="Ask before Mine Field and Full Heal"><span>✅ Confirm big actions</span><input type="checkbox" id="optConfirm" checked><i></i></label>
+          <label class="tog" title="Ask before ending a unit’s turn with 2+ AP left"><span>⚠️ Warn about unspent AP</span><input type="checkbox" id="optApWarn" checked><i></i></label>
+          <label class="tog" title="Random shelling, supply drops and reinforcements keep stalemates moving"><span>🎲 Battlefield events</span><input type="checkbox" id="optEvents" checked><i></i></label>
+          <label class="tog" title="Touch screens: the first tap previews a move or attack, the second tap does it"><span>👆 Tap twice to confirm</span><input type="checkbox" id="optTapConfirm" checked><i></i></label>
+          <label class="tog" title="Short vibration on your turn and when you take a hit (phones)"><span>📳 Vibration</span><input type="checkbox" id="optHaptic" checked><i></i></label>
+          <div class="set-row"><span>📱 Layout</span>
+            <select id="optLayout" onchange="setLayoutPref(this.value)"><option value="auto">Auto</option><option value="mobile">Phone</option><option value="desktop">Desktop</option></select></div>
+          <div class="set-row"><span>⏩ AI speed</span>
+            <select id="optSpeed"><option value="normal">Normal</option><option value="fast">Fast</option><option value="instant">Instant</option></select></div>
+          <button onclick="fitBoard(true)">🗺️ Fit whole map</button>
+        </div>
+      </details>
+
+      <details id="terrainTools" class="card">
+        <summary>🗺️ Map editor</summary>
+        <div class="inner">
+          <div class="tools">
+            <button class="tool" data-tool="forest" onclick="paint('forest')"><span>🌲</span>Forest</button>
+            <button class="tool" data-tool="bush" onclick="paint('bush')"><span>🌿</span>Bush</button>
+            <button class="tool" data-tool="hill" onclick="paint('hill')"><span>⛰️</span>Hill</button>
+            <button class="tool" data-tool="water" onclick="paint('water')"><span>🌊</span>Water</button>
+            <button class="tool" data-tool="rock" onclick="paint('rock')"><span>🪨</span>Rock</button>
+            <button class="tool" data-tool="open" onclick="paint('open')"><span>⬜</span>Clear</button>
+            <button class="tool" data-tool="bridge" onclick="paint('bridge')"><span>🌉</span>Bridge</button>
+            <button class="tool" data-tool="ford" onclick="paint('ford')"><span>👣</span>Ford</button>
+            <button class="tool" data-tool="null" onclick="paint(null)"><span>✋</span>Stop</button>
+            <button class="tool" onclick="randomTerrain()"><span>🎲</span>Random</button>
+          </div>
+          <div class="io-grid">
+            <button onclick="blankTerrain()">🗑 Clear all</button>
+            <button onclick="undoPaint()">↩ Undo paint</button>
+            <button onclick="exportMap()">⬇ Export map</button>
+            <button onclick="importAny()">⬆ Import file</button>
+          </div>
+          <div class="empty-note">Drag to paint · Shift+drag to pan · Ctrl+Z undoes</div>
+        </div>
+      </details>
+
+      <button class="restart" onclick="location.reload()">🔄 Restart game</button>
+    </div>
+  </div>
+  <div class="board-container"><div id="board"></div><button id="setupBar" onclick="doneBuying()">✅ Done buying — Start Battle</button>
+    <button id="cancelBtn" class="cancel" style="display:none" onclick="cancelAttack()">✖ Cancel</button>
+    <div id="mobHud">
+      <button id="hudMenu" class="hud-btn" onclick="toggleDrawer()" aria-label="Menu">☰</button>
+      <div id="hudCol">
+        <button class="hud-btn" onclick="zoomBy(1.25)" aria-label="Zoom in">＋</button>
+        <button class="hud-btn" onclick="zoomBy(0.8)" aria-label="Zoom out">－</button>
+        <button class="hud-btn" onclick="focusActive()" aria-label="Centre on active unit">🎯</button>
+        <button class="hud-btn" onclick="fitBoard(true)" aria-label="Fit whole map">🗺</button>
+        <button class="hud-btn" onclick="toggleFullscreen()" aria-label="Fullscreen">⛶</button>
+      </div>
+    </div>
+    <div id="mobChip" class="mob" onclick="toggleDrawer()"></div>
+    <div id="creatorBar">
+      <input id="mapName" type="text" maxlength="40" value="My map" title="Map name">
+      <button onclick="undoPaint()" title="Ctrl+Z">↩ Undo</button>
+      <button onclick="blankTerrain()">🗑 Clear</button>
+      <button onclick="randomTerrain()">🎲 Random</button>
+      <button onclick="exportMap()">⬇ Export</button>
+      <button onclick="importAny()">⬆ Import</button>
+      <button class="go" onclick="testMap()">▶ Test map</button>
+      <button onclick="leaveCreator(false)">✖ Menu</button>
+    </div></div>
+  <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+  <div id="scrim" onclick="closeDrawer()"></div>
+  <div id="edgeSwipe"></div>
+</div>
+
+<div class="bottom-bar" id="bottomBar">
+  <button onclick="beginAttack(0,false)" id="btnAttack">⚔️ Attack (2)</button>
+  <button onclick="beginAttack(0,true)" id="btnAimed">🎯 Aimed (3)</button>
+  <button onclick="beginAttack(1,false)" id="btnGren">💣 Grenade (2)</button>
+  <button onclick="stance('defend')" id="btnDefend">🛡️ Defend</button>
+  <button onclick="stance('aim')" id="btnAim">🎯 Aim</button>
+  <button onclick="stance('overwatch')" id="btnOver">👁️ Overwatch</button>
+  <button onclick="beginHeal(1)" id="btnHeal1">🩹 Heal 1 (1)</button>
+  <button onclick="beginHeal(2)" id="btnHeal2">🩹 Heal 2 (2)</button>
+  <button onclick="beginHeal(99)" id="btnHealFull">🩹 Full Heal (3)</button>
+  <button onclick="dropMine()" id="btnMine">✱ Drop Mine (1)</button>
+  <button onclick="mineField()" id="btnMineField">✱✱ Mine Field (3)</button>
+  <button onclick="undoMove()" id="btnUndo" title="Ctrl+Z / U">↩️ Undo Move</button>
+  <button onclick="endTurnOrNew()" id="btnEnd" class="end-turn">End Turn / New Round</button>
+</div>
+
+<script>
+const CELL = 42;
+let COLS = 14, ROWS = 10;
+const MAP_SIZES = { small: { c: 10, r: 8 }, medium: { c: 14, r: 10 }, large: { c: 20, r: 14 } };
+let mapSize = 'medium';
+
+let units = [], cur = null, queue = [], uid = 0, paintMode = null, terr = {}, cells = [];
+let pm = 100, am = 100, aiOn = false, radial = null, attackMode = false, isGren = false, isAimed = false, healMode = false, healAmt = 0;
+let roundNum = 1, kills = 0;
+let visSet = new Set(), ghosts = {}, seenIds = new Set(), moveHistory = [];
+let lastTurnOwner = null, pendingRound = false, focusTimer = null;
+
+const types = {
+  soldier: { n: 'Infantry', i: '🪖', mv: 4, rg: 5, at: '1d6', df: 3, hp: 4, c: 10, gr: 1, ap: 4 },
+  mg: { n: 'MG', i: '🎯', mv: 2, rg: 8, at: '2d6', df: 4, hp: 6, c: 25, ap: 3 },
+  tank: { n: 'Tank', i: '🚜', mv: 5, rg: 6, at: '3d6', df: 6, hp: 10, c: 50, sp: 1, ap: 4, overrun: true, vehicle: true, atkExtra: 1 },
+  medic: { n: 'Medic', i: '⚕️', mv: 3, rg: 3, at: '1d6', df: 3, hp: 5, c: 15, ap: 4, heal: true },
+  sniper: { n: 'Sniper', i: '🔫', mv: 3, rg: 10, at: '2d6', df: 2, hp: 3, c: 30, ap: 3 },
+  scout: { n: 'Scout', i: '🏃', mv: 6, rg: 4, at: '1d6', df: 3, hp: 3, c: 12, ap: 3, move: 3 },
+  heavy: { n: 'Heavy', i: '💥', mv: 3, rg: 4, at: '3d6', df: 5, hp: 8, c: 35, ap: 3, gr: 1, antiArmor: true },
+  engineer: { n: 'Engineer', i: '🔧', mv: 3, rg: 4, at: '1d6', df: 4, hp: 5, c: 18, ap: 4, antiArmor: true },
+  miner: { n: 'Mine Specialist', i: '💣', mv: 3, rg: 3, at: '1d6', df: 3, hp: 4, c: 20, ap: 4, mines: 2 },
+  flamer: { n: 'Flamer Tank', i: '🔥', mv: 4, rg: 3, at: '2d6', df: 5, hp: 9, c: 40, ap: 4, flame: true, unlock: 3, vehicle: true },
+  arty: { n: 'Artillery', i: '💣', mv: 2, rg: 12, at: '4d6', df: 3, hp: 6, c: 45, ap: 3, arty: true, unlock: 5, vehicle: true }
+};
+const fx = { open: { m: 1, b: 0, c: 0, i: 0 }, forest: { m: 2, b: 1, c: 25, i: 0 }, hill: { m: 1, b: 0, c: 15, i: 0 }, water: { m: 99, b: 0, c: 0, i: 1 }, rock: { m: 99, b: 1, c: 0, i: 1 }, bush: { m: 1, b: 0, c: 15, i: 0 } };
+
+function unitSVG(ty) {
+  const O = 'stroke:var(--d);stroke-width:1.4;stroke-linejoin:round;';
+  const F = 'fill:var(--c);';
+  const T = 'fill:#2f2f2f;stroke:#111;stroke-width:.8;';
+  const svg = inner => `<svg width="40" height="40" viewBox="0 0 40 40">${inner}</svg>`;
+  const ring = '<circle cx="20" cy="20" r="16.5" style="fill:var(--d);opacity:.25"/><circle cx="20" cy="20" r="15" style="fill:none;stroke:var(--d);stroke-width:2"/>';
+  const body = (rx, ry) => `<ellipse cx="19" cy="20" rx="${rx}" ry="${ry}" style="${F}${O}"/>`;
+  const arms = (x = 29) => `<path d="M19 12.5 L${x} 19 M19 27.5 L${x - 1} 21" style="fill:none;stroke:var(--d);stroke-width:4.6;stroke-linecap:round"/><path d="M19 12.5 L${x} 19 M19 27.5 L${x - 1} 21" style="fill:none;stroke:var(--c);stroke-width:2.8;stroke-linecap:round"/>`;
+  const gun = (x2, w) => `<rect x="22" y="${20 - w / 2}" width="${x2 - 22}" height="${w}" rx="1" style="fill:#2b2b2b;stroke:#111;stroke-width:.6"/>`;
+  const head = (r, fill) => `<circle cx="20" cy="20" r="${r}" style="${fill || F}${O}"/><path d="M${20 - r * .65} ${20 - r * .45} Q20 ${20 - r * 1.25} ${20 + r * .65} ${20 - r * .45}" style="fill:none;stroke:#fff;stroke-width:1.2;opacity:.55;stroke-linecap:round"/>`;
+  const pack = fill => `<rect x="9" y="15.5" width="8" height="9" rx="2" style="fill:${fill};${O}"/>`;
+  const treads = (x1, x2, y1, y2) => {
+    let m = '';
+    for (let x = x1 + 4; x < x2; x += 4) m += `M${x} ${y1}v6M${x} ${y2}v6`;
+    return `<rect x="${x1}" y="${y1}" width="${x2 - x1}" height="6" rx="2" style="${T}"/><rect x="${x1}" y="${y2}" width="${x2 - x1}" height="6" rx="2" style="${T}"/><path d="${m}" style="stroke:#666;stroke-width:.8;fill:none"/>`;
+  };
+  if (ty === 'tank') return svg(treads(4, 36, 8, 26) +
+    `<rect x="6" y="12" width="28" height="16" rx="3" style="${F}${O}"/><rect x="8" y="14" width="6" height="12" rx="1" style="fill:var(--d);opacity:.35"/>` +
+    `<rect x="24" y="18.5" width="14" height="3" rx="1" style="fill:#333;stroke:#111;stroke-width:.6"/><rect x="35" y="17.6" width="4.5" height="4.8" rx="1" style="fill:#222"/>` +
+    `<circle cx="19" cy="20" r="6.8" style="${F}${O}"/><circle cx="17.5" cy="20" r="2.2" style="fill:var(--d)"/>`);
+  if (ty === 'flamer') return svg(treads(5, 33, 8, 26) +
+    `<rect x="7" y="12" width="24" height="16" rx="3" style="${F}${O}"/>` +
+    `<circle cx="14" cy="16.5" r="3.6" style="fill:#e09f1f;stroke:#8a5a00;stroke-width:1"/><circle cx="14" cy="23.5" r="3.6" style="fill:#e09f1f;stroke:#8a5a00;stroke-width:1"/>` +
+    `<rect x="25" y="18.6" width="11" height="2.8" rx="1" style="fill:#333"/><circle cx="37" cy="20" r="2.2" style="fill:#555"/>` +
+    `<path d="M38.5 20 Q42 16 46 20 Q42 24 38.5 20Z" style="fill:#ff9800;stroke:#e65100;stroke-width:1"/>`);
+  if (ty === 'arty') return svg(
+    `<path d="M12 20 L3 13 M12 20 L3 27" style="fill:none;stroke:#333;stroke-width:2.6;stroke-linecap:round"/>` +
+    `<rect x="13" y="7" width="9" height="5" rx="1.5" style="${T}"/><rect x="13" y="28" width="9" height="5" rx="1.5" style="${T}"/>` +
+    `<rect x="11" y="13" width="14" height="14" rx="2" style="${F}${O}"/><circle cx="17" cy="20" r="3" style="fill:#444"/>` +
+    `<rect x="23" y="11" width="3.5" height="18" rx="1" style="fill:var(--d);stroke:#111;stroke-width:.8"/>` +
+    `<rect x="26" y="18.4" width="12" height="3.2" rx="1" style="fill:#333"/><rect x="36" y="17.4" width="3.8" height="5.2" rx="1" style="fill:#222"/>`);
+  if (ty === 'mg') return svg(ring + pack('#5b6b3a') + body(6, 11) + arms(30) + gun(38, 4.2) +
+    `<path d="M34 20 L37.5 14.5 M34 20 L37.5 25.5" style="fill:none;stroke:#222;stroke-width:1.5;stroke-linecap:round"/>` +
+    `<rect x="24" y="22.5" width="6" height="5" rx="1" style="fill:#6d6d3c;stroke:#333;stroke-width:.8"/>` + head(5));
+  if (ty === 'sniper') return svg(ring + body(4.8, 9.8) + arms(28) + gun(39.5, 2) +
+    `<rect x="26" y="16.6" width="6" height="2.2" rx="1" style="fill:#111"/>` +
+    `<circle cx="20" cy="20" r="7.4" style="fill:var(--d);opacity:.45"/>` + head(4.8));
+  if (ty === 'medic') return svg(ring + pack('#fff') + `<path d="M13 17.5v5M10.5 20h5" style="stroke:#d32f2f;stroke-width:1.8"/>` +
+    body(5.5, 10.5) + arms(27) + gun(30, 2) + head(5, 'fill:#fff;') + `<path d="M20 17.5v5M17.5 20h5" style="stroke:#d32f2f;stroke-width:1.8"/>`);
+  if (ty === 'scout') return svg(ring + body(4.5, 8.8) + arms(28) + gun(32, 2.4) + head(4.6) +
+    `<path d="M23.5 17.8 Q28 20 23.5 22.2Z" style="fill:var(--d)"/>`);
+  if (ty === 'heavy') return svg(ring + pack('#4a4a3a') + body(7, 12.5) +
+    `<rect x="4" y="17.8" width="33" height="4.4" rx="2" style="fill:#55553f;stroke:#222;stroke-width:.8"/><rect x="34" y="16.4" width="4.4" height="7.2" rx="1.2" style="fill:#2b2b2b"/>` +
+    arms(30) + head(5.5));
+  if (ty === 'engineer') return svg(ring + `<rect x="8" y="14.5" width="9" height="11" rx="1.5" style="fill:#c9a227;stroke:#6b5a12;stroke-width:1"/>` +
+    body(5.5, 10.5) + arms(28) + `<path d="M27 21 L35 28" style="stroke:#9aa0a6;stroke-width:2.6;stroke-linecap:round"/><circle cx="36" cy="29" r="2.4" style="fill:none;stroke:#9aa0a6;stroke-width:1.6"/>` +
+    head(5, 'fill:#f4c20d;'));
+  if (ty === 'miner') return svg(ring + `<circle cx="11.5" cy="20" r="5.6" style="fill:#3a3a3a;stroke:#111;stroke-width:1"/><circle cx="11.5" cy="20" r="2" style="fill:#c0392b"/>` +
+    body(5.5, 10.5) + arms(30) + `<path d="M28 20 L36 20" style="stroke:#222;stroke-width:1.6"/><circle cx="37" cy="20" r="3.4" style="fill:#777;stroke:#222;stroke-width:1"/>` + head(5));
+  return svg(ring + pack('#5b6b3a') + body(5.5, 10.5) + arms() + gun(37, 3) + head(5));   // infantry
+}
+const k = (x, y) => x + ',' + y;
+const dist = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+
+function px(x, y) {
+  return { x: x * CELL + CELL / 2 + 20, y: y * CELL + CELL / 2 + 20 };
+}
+
+// All audio is loaded from this folder (keep the trailing slash). Change it here if you move the files.
+const MUSIC_BASE = 'https://explore.m-jayz.com/TS/music/';
+const soundFiles = {
+  move: 'Move.mp3',
+  shot: 'Attack-Shot.mp3',
+  sniper: 'Sniper_shoots.mp3',
+  hit: 'Bullet-hit.mp3',
+  tankhit: 'Tank_hit_by_enemy.mp3',
+  miss: 'Miss.mp3',
+  grenade: 'Grenade.mp3',
+  heal: 'Heal.mp3',
+  buy: 'Buy-Deploy.mp3',
+  overwatch: 'Overwatch.mp3',
+  destroy: 'Destroy.mp3',
+  win: 'win.mp3',
+  lose: 'Lose.mp3',
+  // --- sounds below are optional: until the file exists the game falls back to a similar sound (see SOUND_FALLBACK) ---
+  flame: 'Flamethrower.mp3', tankshot: 'Tank-Cannon.mp3', mgburst: 'MG-Burst.mp3', artyshot: 'Artillery-Fire.mp3', bazooka: 'Bazooka.mp3',
+  ram: 'Tank-Ram.mp3', minelay: 'Mine-Place.mp3', mineboom: 'Mine-Explosion.mp3', siren: 'Incoming-Shell.mp3', shellboom: 'Shell-Explosion.mp3',
+  crate: 'Supply-Drop.mp3', pickup: 'Pickup.mp3', yourturn: 'Your-Turn.mp3', flag: 'Flag-Pickup.mp3', capture: 'Flag-Capture.mp3', point: 'Point-Scored.mp3'
+};
+const SOUND_FALLBACK = { flame: 'shot', tankshot: 'grenade', mgburst: 'shot', artyshot: 'grenade', bazooka: 'grenade', ram: 'hit', minelay: 'buy', mineboom: 'grenade',
+  siren: 'overwatch', shellboom: 'grenade', crate: 'buy', pickup: 'buy', flag: 'heal', capture: 'win', point: 'heal' };
+const sounds = {};
+Object.keys(soundFiles).forEach(key => {
+  const a = new Audio(MUSIC_BASE + encodeURIComponent(soundFiles[key]));
+  a.preload = 'auto';
+  if (a.addEventListener) a.addEventListener('error', () => { a._bad = true; });   // file missing -> use the fallback
+  sounds[key] = a;
+});
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  Object.values(sounds).forEach(s => { s.load(); });
+}
+document.addEventListener('click', unlockAudio, { once: true });
+function playSound(type) {
+  let snd = sounds[type];
+  if (!snd || snd._bad) snd = sounds[SOUND_FALLBACK[type]];
+  if (!snd || snd._bad) return;
+  snd.currentTime = 0;
+  snd.play().catch(() => {});
+}
+
+let panX = 0, panY = 0, zoom = 1, isPanning = false, panStartX = 0, panStartY = 0;
+
+function clampPan() {          // never lose the whole map off-screen
+  const c = document.querySelector('.board-container');
+  if (!c || c.clientWidth < 10) return;
+  const bw = (COLS * CELL + 40) * zoom, bh = (ROWS * CELL + 40) * zoom, m = 90;
+  panX = Math.min(c.clientWidth - m, Math.max(m - bw, panX));
+  panY = Math.min(c.clientHeight - m, Math.max(m - bh, panY));
+}
+function applyPan() {
+  clampPan();
+  const b = document.getElementById('board');
+  b.style.setProperty('--inv', String(Math.min(1.8, Math.max(0.7, 1 / zoom))));   // keeps on-map menus a readable size
+  b.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+  b.style.transformOrigin = '0 0';
+}
+
+function fitBoard(animate) {
+  const container = document.querySelector('.board-container');
+  const boardW = COLS * CELL + 40;
+  const boardH = ROWS * CELL + 40;
+  const cw = container.clientWidth;
+  const ch = container.clientHeight;
+  if (cw < 10 || ch < 10) return;
+  const bar = document.getElementById('creatorBar');
+  const topPad = (creatorMode && bar) ? bar.offsetHeight + 16 : 0;   // keep the map clear of the creator toolbar
+  zoom = Math.min(cw / boardW, (ch - topPad) / boardH, 1.5);
+  panX = (cw - boardW * zoom) / 2;
+  panY = topPad + (ch - topPad - boardH * zoom) / 2;
+  if (animate === true) {
+    const bd = document.getElementById('board');
+    bd.classList.add('animate');
+    clearTimeout(focusTimer);
+    focusTimer = setTimeout(() => bd.classList.remove('animate'), 500);
+  }
+  applyPan();
+}
+function buildBoard() {
+  const b = document.getElementById('board');
+  b.innerHTML = ''; cells = [];
+  Object.keys(terr).forEach(kk => delete terr[kk]);
+  const frame = document.createElement('div');
+  frame.id = 'mapBorder';
+  frame.style.cssText = `left:14px;top:14px;width:${COLS * CELL + 12}px;height:${ROWS * CELL + 12}px;`;
+  b.appendChild(frame);
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const p = px(x, y);
+    const c = document.createElement('div');
+    c.className = 'cell open';
+    c.style.left = (p.x - CELL / 2) + 'px';
+    c.style.top = (p.y - CELL / 2) + 'px';
+    c.dataset.x = x; c.dataset.y = y;
+    c.onclick = () => clickCell(x, y);
+    c.onmouseenter = () => { if (lastPointerType !== 'mouse') return; if (painting) applyPaint(x, y); onHover(x, y); };
+    c.onmouseleave = () => { if (lastPointerType === 'mouse') clearHover(); };
+    b.appendChild(c);
+    cells.push({ x, y, el: c });
+    terr[k(x, y)] = 'open';
+  }
+}
+function setMapSize(name) {
+  const sz = MAP_SIZES[name];
+  if (!sz || battleStarted || aiOn) return;
+  mapSize = name; COLS = sz.c; ROWS = sz.r;
+  units = []; cur = null; queue = []; resources = []; mines = []; ghosts = {}; seenIds = new Set(); moveHistory = []; coverWear = {}; shells = [];
+  buildBoard();
+  generateTerrain();
+  setTimeout(() => fitBoard(true), 0);
+  document.querySelectorAll('.sz:not(.lv):not(.md)').forEach(el => el.classList.toggle('active', el.dataset.s === name));
+}
+function init() {
+  buildShop();
+  buildBoard();
+  const b = document.getElementById('board');
+  // Pan handlers
+  b.onmousedown = e => {
+    const cellEl = e.target.closest ? e.target.closest('.cell') : null;
+    if (paintMode && !battleStarted && cellEl && !e.shiftKey && e.button === 0) {
+      pushPaintUndo(); painting = true;
+      applyPaint(+cellEl.dataset.x, +cellEl.dataset.y);
+      e.preventDefault();
+      return;
+    }
+    if (e.target === b || e.target.classList.contains('cell') || e.target.closest('.tsvg')) {
+      isPanning = true;
+      panStartX = e.clientX - panX;
+      panStartY = e.clientY - panY;
+      b.classList.add('panning');
+    }
+  };
+  window.onmousemove = e => {
+    if (!isPanning) return;
+    panX = e.clientX - panStartX;
+    panY = e.clientY - panStartY;
+    applyPan();
+  };
+  window.onmouseup = () => {
+    if (painting) { painting = false; render(); }
+    isPanning = false;
+    document.getElementById('board').classList.remove('panning');
+  };
+  // Zoom with mouse wheel
+  b.parentElement.addEventListener('wheel', e => {
+    e.preventDefault();
+    setZoomAt(e.clientX, e.clientY, zoom * (e.deltaY > 0 ? 0.9 : 1.1));   // zoom toward the cursor
+  }, { passive: false });
+  generateTerrain();
+  setBanner('Map ready');
+  setTimeout(fitBoard, 50);
+  window.addEventListener('resize', () => { applyLayoutMode(); if (isMobileLayout()) applyPan(); else fitBoard(); });   // phones resize constantly as the browser bars hide
+  window.addEventListener('orientationchange', () => setTimeout(() => fitBoard(true), 350));
+}
+function clearHover() {
+  document.querySelectorAll('.hover-arrow, .hover-line').forEach(e => e.remove());
+}
+function onHover(x, y) {
+  clearHover();
+  if (!cur || cur.pl !== 1) return;
+  const b = document.getElementById('board');
+  const from = px(cur.x, cur.y);
+  const to = px(x, y);
+  const t = terr[k(x, y)] || 'open';
+  const fxT = fx[t];
+
+  // Terrain tooltip
+  const tip = document.createElement('div');
+  tip.className = 'hover-arrow';
+  tip.classList.add('tip-dark', 'small');
+  tip.style.cssText = `position:absolute;left:${to.x + 10}px;top:${to.y - 24}px;z-index:45;pointer-events:none;`;
+  tip.innerHTML = `${deco[k(x, y)] || t}<br>Cover ${fxT.c}%${fxT.b ? ' · blocks LOS' : ''}${fxT.i ? ' · impassable' : ''}${fxT.m === 2 ? ' · slow (2 steps)' : ''}${t === 'forest' && cur && types[cur.ty] && types[cur.ty].vehicle ? ' · vehicles: 2 AP to push through' : ''}${(coverWear[k(x, y)] || 0) >= 10 ? ' · cover worn −' + coverWear[k(x, y)] + '%' : ''}`;
+  b.appendChild(tip);
+
+  if (attackMode) {
+    const blocked = !hasLOS(cur, { x, y });
+    const line = document.createElement('div');
+    line.className = 'hover-line';
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const len = Math.hypot(dx, dy);
+    const ang = Math.atan2(dy, dx) * 180 / Math.PI;
+    line.style.cssText = `position:absolute;left:${from.x}px;top:${from.y}px;width:${len}px;height:3px;background:${blocked ? '#c0392b' : '#27ae60'};transform-origin:0 50%;transform:rotate(${ang}deg);pointer-events:none;z-index:40;opacity:0.8;`;
+    b.appendChild(line);
+  } else {
+    const reach = moveCells(cur, { overrun: canRamNow(cur), fog: true });
+    if (reach.has(k(x, y)) && cur.ap >= 1) {
+      const apc = Math.max(1, Math.ceil(reach.get(k(x, y)).cost / perAp(cur)));
+      let kk = k(x, y); const path = [];
+      while (kk) { const nd = reach.paths.get(kk); if (!nd || !nd.prev) break; path.unshift(kk); kk = nd.prev; }
+      path.forEach((pk, i) => {
+        const [cx, cy] = pk.split(',').map(Number);
+        const p = px(cx, cy);
+        const dot = document.createElement('div');
+        dot.className = 'hover-arrow';
+        dot.textContent = i === path.length - 1 ? (apc > 1 ? '● ' + apc + ' AP' : '●') : '·';
+        dot.style.cssText = `position:absolute;left:${p.x - 6}px;top:${p.y - 8}px;font-size:14px;color:#fff;text-shadow:0 0 3px #000;pointer-events:none;z-index:40;`;
+        b.appendChild(dot);
+      });
+    }
+  }
+}
+function setBanner(t) {
+  const el = document.getElementById('banner');
+  if (!el) return;
+  el.textContent = t;
+  el.className = 'status-banner' + (battleStarted && cur ? (cur.pl === 1 ? ' turn-you' : ' turn-ai') : '');
+}
+function updateUnitList() {
+  const el = document.getElementById('unitList');
+  if (!el) return;
+  const yours = units.filter(u => u.pl === 1);
+  const enemies = units.filter(u => u.pl === 2);
+  const seen = enemies.filter(u => isVisible(u));
+  const unknown = enemies.length - seen.length;
+  const row = (u, enemy) => {
+    const active = cur && cur.id === u.id ? ' active' : '';
+    const done = !enemy && battleStarted && u.ap <= 0 ? ' done' : '';
+    const pct = Math.max(0, u.hp / u.mx * 100);
+    const pips = enemy ? '<span></span>' : '<span class="mini-pips">' + '●'.repeat(Math.max(0, u.ap)) + '<s>' + '●'.repeat(Math.max(0, u.maxAp - u.ap)) + '</s></span>';
+    return `<div class="ul-row tm${u.pl}${active}${done}" onclick="selectUnit(${u.id})" title="Click to ${enemy ? 'look at' : 'select'} this unit">` +
+      `<span class="ul-ico">${unitSVG(u.ty)}</span><span class="ul-name">${u.n}</span><span class="ul-hp">${u.hp}/${u.mx}</span>` +
+      `<span class="ul-bar"><i class="${pct <= 33 ? 'low' : ''}" style="width:${pct}%"></i></span>${pips}</div>`;
+  };
+  let html = `<div class="sec">Your squad <em>${yours.length}</em></div>` + (yours.map(u => row(u, false)).join('') || '<div class="empty-note">No units yet — deploy some above</div>');
+  if (aiOn) {
+    html += `<div class="sec">Enemy contacts <em>${seen.length}${unknown > 0 ? ' + ' + unknown + ' ?' : ''}</em></div>` + seen.map(u => row(u, true)).join('');
+    if (unknown > 0) html += `<div class="empty-note">❓ ${unknown} unknown unit${unknown > 1 ? 's' : ''} in the fog</div>`;
+  }
+  el.innerHTML = html;
+}
+function selectUnit(id, quiet) {
+  const u = units.find(x => x.id === id);
+  if (!u) return;
+  refreshVision();
+  if (u.pl === 2) { if (isVisible(u)) { focusOn(u.x, u.y); if (document.body.classList.contains('mobile')) closeDrawer(); } return; }
+  if (!quiet) focusOn(u.x, u.y);
+  if (cur && cur.pl === 2 && battleStarted) { setBanner('Wait for the enemy turn to finish'); return; }
+  attackMode = false; isGren = false; isAimed = false; healMode = false;
+  document.getElementById('cancelBtn').style.display = 'none';
+  cur = u;
+  render(); ui(); updateBar();
+  setBanner(u.n + ' selected — AP ' + u.ap);
+  if (!quiet && document.body.classList.contains('mobile')) closeDrawer();
+}
+const tvar = {}, deco = {};
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+function cellBg(type, x, y) {
+  const R = rng(x * 31 + y * 17 + 5), j = (R() - .5) * 5, dc = deco[k(x, y)];
+  if (dc === 'ford') return `hsl(190,45%,${66 + j}%)`;
+  if (type === 'water' || dc === 'bridge') return `hsl(205,50%,${57 + j}%)`;
+  if (type === 'forest') return `hsl(98,26%,${44 + j}%)`;
+  if (type === 'hill') return `hsl(46,36%,${63 + j}%)`;
+  if (type === 'rock') return `hsl(85,16%,${52 + j}%)`;
+  return `hsl(88,30%,${62 + j}%)`;
+}
+function treeSVG(cx, cy, kind, R) {
+  const sh = `<ellipse cx="${(cx + 3).toFixed(1)}" cy="${(cy + 4).toFixed(1)}" rx="9" ry="7" style="fill:rgba(0,0,0,.2)"/>`;
+  if (kind === 'pine') {
+    let pts = ''; const n = 10, ro = 10.5 + R() * 1.5;
+    for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2, r = i % 2 ? 5 : ro; pts += (cx + Math.cos(a) * r).toFixed(1) + ',' + (cy + Math.sin(a) * r).toFixed(1) + ' '; }
+    const L = 24 + Math.floor(R() * 6);
+    return sh + `<polygon points="${pts}" style="fill:hsl(145,42%,${L}%);stroke:hsl(145,45%,14%);stroke-width:1;stroke-linejoin:round"/><circle cx="${(cx - 1).toFixed(1)}" cy="${(cy - 1).toFixed(1)}" r="3.4" style="fill:hsl(145,40%,${L + 9}%)"/>`;
+  }
+  const L = 34 + Math.floor(R() * 6), r0 = 9 + R() * 2;
+  let o = sh + `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r0.toFixed(1)}" style="fill:hsl(105,38%,${L}%);stroke:hsl(105,42%,18%);stroke-width:1"/>`;
+  for (let i = 0; i < 4; i++) { const a = R() * 6.28, d = R() * 5; o += `<circle cx="${(cx + Math.cos(a) * d).toFixed(1)}" cy="${(cy + Math.sin(a) * d).toFixed(1)}" r="${(3 + R() * 2.5).toFixed(1)}" style="fill:hsl(105,40%,${L + 8 + Math.floor(R() * 6)}%);opacity:.85"/>`; }
+  return o;
+}
+function rockSVG(cx, cy, r, R, mountain) {
+  const n = mountain ? 9 : 7, pts = [];
+  for (let i = 0; i < n; i++) { const a = i / n * 6.283 + R() * .35, rr = r * (.78 + R() * .32); pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]); }
+  const poly = arr => arr.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+  let o = `<polygon points="${poly(pts.map(p => [p[0] + 3, p[1] + 3.5]))}" style="fill:rgba(0,0,0,.24)"/>`;
+  for (let i = 0; i < n; i++) {
+    const p = pts[i], q = pts[(i + 1) % n];
+    const mid = Math.atan2((p[1] + q[1]) / 2 - cy, (p[0] + q[0]) / 2 - cx);
+    const L = Math.round(50 + 24 * Math.cos(mid + 2.356));
+    o += `<polygon points="${cx.toFixed(1)},${cy.toFixed(1)} ${poly([p, q])}" style="fill:hsl(28,5%,${L}%);stroke:hsl(28,5%,30%);stroke-width:.6"/>`;
+  }
+  o += `<polygon points="${poly(pts)}" style="fill:none;stroke:hsl(28,5%,22%);stroke-width:1.3;stroke-linejoin:round"/>`;
+  if (mountain) o += `<polygon points="${poly(pts.map(p => [cx + (p[0] - cx) * .38, cy + (p[1] - cy) * .38]))}" style="fill:hsl(200,25%,94%);opacity:.92"/>`;
+  return o;
+}
+function terrainSVG(type, x, y) {
+  const key = k(x, y), R = rng(x * 7919 + y * 104729 + 17), v = tvar[key], dc = deco[key];
+  const f = n => n.toFixed(1);
+  const waterish = (cx, cy) => { const kk = k(cx, cy); return terr[kk] === 'water' || deco[kk] === 'bridge' || deco[kk] === 'ford'; };
+  const onMap = (cx, cy) => cx >= 0 && cy >= 0 && cx < COLS && cy < ROWS;
+  let g = '';
+  if (type === 'water' || dc === 'bridge' || dc === 'ford') {
+    const bank = '#d9cc95', foam = 'fill:none;stroke:#fff;stroke-width:1.4;opacity:.7';
+    const edge = (dx, dy) => onMap(x + dx, y + dy) && !waterish(x + dx, y + dy);
+    if (edge(0, -1)) g += `<rect x="0" y="0" width="42" height="6" style="fill:${bank}"/><path d="M0 7 Q10 9 21 7 T42 7" style="${foam}"/>`;
+    if (edge(0, 1)) g += `<rect x="0" y="36" width="42" height="6" style="fill:${bank}"/><path d="M0 35 Q10 33 21 35 T42 35" style="${foam}"/>`;
+    if (edge(-1, 0)) g += `<rect x="0" y="0" width="6" height="42" style="fill:${bank}"/><path d="M7 0 Q9 10 7 21 T7 42" style="${foam}"/>`;
+    if (edge(1, 0)) g += `<rect x="36" y="0" width="6" height="42" style="fill:${bank}"/><path d="M35 0 Q33 10 35 21 T35 42" style="${foam}"/>`;
+    if (dc !== 'bridge') for (let i = 0; i < 3; i++) g += `<path d="M${f(6 + R() * 22)} ${f(8 + R() * 26)} q4 -3 8 0 t8 0" style="fill:none;stroke:#fff;stroke-width:1.3;opacity:.4;stroke-linecap:round"/>`;
+  }
+  if (dc === 'ford') for (let i = 0; i < 5; i++) g += `<ellipse cx="${f(6 + R() * 30)}" cy="${f(6 + R() * 30)}" rx="${f(2.5 + R() * 2)}" ry="${f(2 + R() * 1.5)}" style="fill:#a4a49c;stroke:#6e6e68;stroke-width:1"/>`;
+  if (dc === 'bridge') {
+    let br = `<rect x="-2" y="8" width="46" height="26" style="fill:#a8773f;stroke:#5a3a18;stroke-width:1.6"/>`;
+    for (let bx = 3; bx < 42; bx += 6) br += `<path d="M${bx} 8 V34" style="stroke:#6e4a22;stroke-width:1.1"/>`;
+    br += `<rect x="-2" y="6" width="46" height="3.5" style="fill:#5a3a18"/><rect x="-2" y="32.5" width="46" height="3.5" style="fill:#5a3a18"/>`;
+    const alongNS = waterish(x, y - 1) || waterish(x, y + 1), alongEW = waterish(x - 1, y) || waterish(x + 1, y);
+    g += (alongEW && !alongNS) ? `<g transform="rotate(90 21 21)">${br}</g>` : br;   // river runs east-west -> bridge runs north-south
+  }
+  if (type === 'forest') {
+    const sets = [[[12, 12], [30, 13], [21, 30]], [[11, 29], [30, 28], [20, 11]], [[11, 11], [31, 12], [11, 30], [31, 31]]];
+    sets[Math.floor(R() * sets.length)].forEach(([tx, ty]) => {
+      tx += (R() - .5) * 6; ty += (R() - .5) * 6;
+      g += treeSVG(tx, ty, v === 'pine' ? 'pine' : v === 'oak' ? 'oak' : (R() < .5 ? 'pine' : 'oak'), R);
+    });
+  } else if (type === 'bush') {
+    const nB = 3 + Math.floor(R() * 2);
+    for (let i = 0; i < nB; i++) {
+      const bx = 9 + R() * 24, by = 9 + R() * 24, r = 5 + R() * 2.5, L = 36 + Math.floor(R() * 7);
+      g += `<ellipse cx="${f(bx + 2)}" cy="${f(by + 3)}" rx="${f(r)}" ry="${f(r * .8)}" style="fill:rgba(0,0,0,.2)"/><circle cx="${f(bx)}" cy="${f(by)}" r="${f(r)}" style="fill:hsl(95,40%,${L}%);stroke:hsl(95,45%,20%);stroke-width:1"/><circle cx="${f(bx - 1.5)}" cy="${f(by - 1.5)}" r="${f(r * .45)}" style="fill:hsl(95,42%,${L + 10}%)"/>`;
+      if (R() < .25) g += `<circle cx="${f(bx + 2)}" cy="${f(by + 1)}" r="1.2" style="fill:#c0392b"/>`;
+    }
+  } else if (type === 'hill') {
+    g += `<g transform="rotate(${Math.round((R() - .5) * 40)} 21 21)"><ellipse cx="22" cy="23" rx="18" ry="15" style="fill:hsl(42,34%,55%);opacity:.55"/><ellipse cx="21" cy="21" rx="17" ry="14" style="fill:hsl(45,40%,64%);stroke:hsl(40,30%,46%);stroke-width:.8"/><ellipse cx="19.5" cy="19" rx="11" ry="8.5" style="fill:hsl(48,44%,71%)"/><ellipse cx="17.5" cy="17" rx="5.5" ry="4" style="fill:hsl(52,50%,79%)"/><path d="M8 27 Q21 33 34 26" style="fill:none;stroke:hsl(40,30%,46%);stroke-width:.9;opacity:.6;stroke-dasharray:3 3"/></g>`;
+  } else if (type === 'rock') {
+    if (v === 'mountain') g += rockSVG(21, 21, 19, R, true);
+    else if (v === 'small') { [[11, 29], [24, 12], [31, 28], [14, 13]].forEach(([rx, ry]) => { g += rockSVG(rx + (R() - .5) * 4, ry + (R() - .5) * 4, 4.5 + R() * 2, R, false); }); }
+    else if (v === 'med') { g += rockSVG(14 + (R() - .5) * 4, 15 + (R() - .5) * 4, 8.5, R, false) + rockSVG(28 + (R() - .5) * 4, 27 + (R() - .5) * 4, 7.5, R, false); }
+    else g += rockSVG(21 + (R() - .5) * 3, 21 + (R() - .5) * 3, 13.5, R, false);
+  } else if (type === 'open' && !dc) {
+    for (let i = 0; i < 3; i++) { const tx = 5 + R() * 32, ty = 8 + R() * 30; g += `<path d="M${f(tx)} ${f(ty)} l-1.6 -4 M${f(tx)} ${f(ty)} l0 -5 M${f(tx)} ${f(ty)} l1.6 -4" style="fill:none;stroke:hsl(95,30%,42%);stroke-width:1;opacity:.55;stroke-linecap:round"/>`; }
+    const q = R();
+    if (q < .12) g += `<circle cx="${f(6 + R() * 30)}" cy="${f(6 + R() * 30)}" r="1.3" style="fill:${R() < .5 ? '#fff' : '#f4d03f'}"/>`;
+    else if (q < .2) g += `<ellipse cx="${f(6 + R() * 30)}" cy="${f(6 + R() * 30)}" rx="2" ry="1.4" style="fill:#a4a49c;stroke:#777;stroke-width:.6"/>`;
+  }
+  return `<svg class="tsvg" width="42" height="42" viewBox="0 0 42 42">${g}</svg>`;
+}
+function applyTerrainVisual(cellEl, type) {
+  const x = +cellEl.dataset.x, y = +cellEl.dataset.y;
+  const old = cellEl.querySelector('.tsvg');
+  if (old) old.remove();
+  cellEl.style.background = cellBg(type || 'open', x, y);
+  cellEl.insertAdjacentHTML('beforeend', terrainSVG(type || 'open', x, y));
+}
+function cellAt(x, y) { return (x >= 0 && y >= 0 && x < COLS && y < ROWS) ? cells[y * COLS + x] : null; }
+function randomVariant(type) {
+  const r = Math.random();
+  if (type === 'forest') return r < .34 ? 'pine' : r < .67 ? 'oak' : 'mixed';
+  if (type === 'rock') return r < .4 ? 'big' : r < .75 ? 'med' : 'small';
+  return undefined;
+}
+function setCellTerrain(x, y, type, variant, decoName) {
+  const kk = k(x, y);
+  terr[kk] = type;
+  if (variant) tvar[kk] = variant; else delete tvar[kk];
+  if (decoName) deco[kk] = decoName; else delete deco[kk];
+  const c = cellAt(x, y);
+  if (!c) return;
+  c.el.className = 'cell ' + type;
+  applyTerrainVisual(c.el, type);
+}
+function redrawTerrainAround(x, y) {
+  [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => { const c = cellAt(x + dx, y + dy); if (c) applyTerrainVisual(c.el, terr[k(c.x, c.y)] || 'open'); });
+}
+function paint(m) { if (battleStarted) { paintMode = null; log('Terrain is locked once the battle starts'); return; } paintMode = m; document.querySelectorAll('.tool').forEach(b => b.classList.toggle('active', !!m && b.dataset.tool === m)); setBanner(m ? 'Painting ' + m + ' — drag to paint, Shift+drag to pan' : 'Paint off'); }
+
+// ---- procedural terrain: a river with crossings, wooded areas, hill ridges, rock outcrops ----
+const mapMargin = () => Math.max(2, Math.round(COLS * 0.16));   // deployment zones stay free of water/rock
+function genTerrainData() {
+  const R = Math.random, ri = (a, b) => a + Math.floor(R() * (b - a + 1));
+  const margin = mapMargin(), big = COLS >= 18, small = COLS <= 10;
+  Object.keys(terr).forEach(kk => { terr[kk] = 'open'; });
+  Object.keys(tvar).forEach(kk => delete tvar[kk]);
+  Object.keys(deco).forEach(kk => delete deco[kk]);
+  const inB = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;
+  const inZone = x => x < margin || x >= COLS - margin;
+  const isOpen = (x, y) => inB(x, y) && terr[k(x, y)] === 'open' && !deco[k(x, y)];
+  const put = (x, y, t, v) => { terr[k(x, y)] = t; if (v) tvar[k(x, y)] = v; else delete tvar[k(x, y)]; };
+  const grow = (sx, sy, size, ok, axis) => {
+    const out = [[sx, sy]], seen = new Set([k(sx, sy)]);
+    const dirs = axis === 'v' ? [[0, 1], [0, -1], [0, 1], [0, -1], [1, 0], [-1, 0]] : axis === 'h' ? [[1, 0], [-1, 0], [1, 0], [-1, 0], [0, 1], [0, -1]] : [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    let guard = 0;
+    while (out.length < size && guard++ < size * 15) {
+      const b = out[ri(0, out.length - 1)], d = dirs[ri(0, dirs.length - 1)];
+      const nx = b[0] + d[0], ny = b[1] + d[1], kk = k(nx, ny);
+      if (seen.has(kk) || !ok(nx, ny)) continue;
+      seen.add(kk); out.push([nx, ny]);
+    }
+    return out;
+  };
+  const randCell = ok => { for (let i = 0; i < 80; i++) { const x = ri(0, COLS - 1), y = ri(0, ROWS - 1); if (ok(x, y)) return [x, y]; } return null; };
+  const pick = a => a[ri(0, a.length - 1)];
+
+  // River: meanders top to bottom between the armies, with bridges / fords
+  if (R() < 0.88) {
+    let x = ri(margin + 1, COLS - margin - 3);
+    const rows = [];
+    for (let y = 0; y < ROWS; y++) {
+      const w = (y > 0 && y < ROWS - 1 && R() < 0.22) ? 2 : 1;
+      const nx = R() < 0.5 ? x : Math.max(margin, Math.min(COLS - margin - 2, x + (R() < 0.5 ? -1 : 1)));
+      const lo = Math.min(x, nx), hi = Math.max(x, nx) + w - 1, row = [];
+      for (let cx = lo; cx <= hi; cx++) row.push(cx);
+      rows.push(row); x = nx;
+    }
+    rows.forEach((row, y) => row.forEach(cx => put(cx, y, 'water')));
+    const nCross = small ? 1 : big ? 3 : 2, used = new Set();
+    for (let i = 0; i < nCross; i++) {
+      let y = Math.round((i + 1) * ROWS / (nCross + 1) - 0.5) + ri(-1, 1);
+      y = Math.max(1, Math.min(ROWS - 2, y));
+      for (let t = 0; t < 6 && used.has(y); t++) y = Math.max(1, Math.min(ROWS - 2, y + 1));
+      used.add(y);
+      const kind = (i === 0 || R() < 0.5) ? 'bridge' : 'ford';
+      rows[y].forEach(cx => { terr[k(cx, y)] = 'open'; deco[k(cx, y)] = kind; });
+    }
+  }
+  // Pond
+  if (!small && R() < 0.55) {
+    const wb = new Set(Object.keys(terr).filter(kk => terr[kk] === 'water' || deco[kk]));
+    const nearWB = (x, y) => [-1, 0, 1].some(dx => [-1, 0, 1].some(dy => wb.has(k(x + dx, y + dy))));
+    const ok = (x, y) => isOpen(x, y) && !inZone(x) && !nearWB(x, y);
+    const s0 = randCell(ok);
+    if (s0) grow(s0[0], s0[1], ri(3, big ? 8 : 6), ok).forEach(([x, y]) => put(x, y, 'water'));
+  }
+  // Hill ridges
+  const nHill = big ? ri(4, 6) : small ? ri(1, 2) : ri(2, 4);
+  for (let i = 0; i < nHill; i++) {
+    const s0 = randCell(isOpen); if (!s0) continue;
+    grow(s0[0], s0[1], ri(small ? 3 : 4, big ? 12 : 8), isOpen, R() < .5 ? 'h' : 'v').forEach(([x, y]) => put(x, y, 'hill'));
+  }
+  // Woods, with bushes along the edges
+  const nWood = big ? ri(5, 7) : small ? ri(2, 3) : ri(3, 5);
+  for (let i = 0; i < nWood; i++) {
+    const s0 = randCell(isOpen); if (!s0) continue;
+    const style = pick(['pine', 'oak', 'mixed']);
+    const arr = grow(s0[0], s0[1], ri(small ? 4 : 5, big ? 16 : 10), isOpen);
+    arr.forEach(([x, y]) => put(x, y, 'forest', style));
+    arr.forEach(([x, y]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => { if (isOpen(x + dx, y + dy) && R() < .35) put(x + dx, y + dy, 'bush'); }));
+  }
+  for (let i = 0, n = ri(small ? 2 : 4, big ? 10 : 7); i < n; i++) { const c = randCell(isOpen); if (c) put(c[0], c[1], 'bush'); }
+  // Rock outcrops and an occasional mountain range along an edge
+  const rockOK = (x, y) => isOpen(x, y) && !inZone(x);
+  const nRock = big ? ri(3, 5) : small ? 1 : ri(2, 3);
+  for (let i = 0; i < nRock; i++) {
+    const s0 = randCell(rockOK); if (!s0) continue;
+    grow(s0[0], s0[1], ri(1, big ? 5 : 4), rockOK).forEach(([x, y]) => put(x, y, 'rock', randomVariant('rock')));
+  }
+  if (!small && R() < 0.55) {
+    const top = R() < .5, y0 = top ? 0 : ROWS - 1, sx = ri(margin + 1, COLS - margin - 2);
+    const ok = (x, y) => rockOK(x, y) && (top ? y <= 1 : y >= ROWS - 2);
+    if (ok(sx, y0)) grow(sx, y0, ri(4, big ? 10 : 7), ok, 'h').forEach(([x, y]) => put(x, y, 'rock', 'mountain'));
+  }
+  cellsFlat().forEach(([x, y]) => {
+    if (terr[k(x, y)] !== 'rock') return;
+    const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => terr[k(x + dx, y + dy)] === 'rock').length;
+    if (nb >= 3) tvar[k(x, y)] = 'mountain';
+  });
+}
+function cellsFlat() { return cells.map(c => [c.x, c.y]); }
+function terrainPlayable() {
+  const passable = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS && !fx[terr[k(x, y)] || 'open'].i;
+  const margin = mapMargin();
+  let start = null;
+  for (let y = 0; y < ROWS && !start; y++) if (passable(1, y)) start = [1, y];
+  if (!start) return false;
+  const seen = new Set([k(start[0], start[1])]), q = [start];
+  while (q.length) {
+    const [x, y] = q.shift();
+    [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => { const nx = x + dx, ny = y + dy, kk = k(nx, ny); if (passable(nx, ny) && !seen.has(kk)) { seen.add(kk); q.push([nx, ny]); } });
+  }
+  let total = 0;
+  cells.forEach(c => { if (passable(c.x, c.y)) total++; });
+  if (seen.size < total * 0.92) return false;
+  let rightOK = false;
+  seen.forEach(kk => { if (+kk.split(',')[0] >= COLS - margin) rightOK = true; });
+  return rightOK;
+}
+function generateTerrain() {
+  if (battleStarted) { log('Terrain is locked once the battle starts'); return; }
+  let ok = false;
+  for (let attempt = 0; attempt < 40 && !ok; attempt++) { genTerrainData(); ok = terrainPlayable(); }
+  if (!ok) { Object.keys(terr).forEach(kk => { terr[kk] = 'open'; }); Object.keys(tvar).forEach(kk => delete tvar[kk]); Object.keys(deco).forEach(kk => delete deco[kk]); }
+  cells.forEach(c => { c.el.className = 'cell ' + (terr[k(c.x, c.y)] || 'open'); applyTerrainVisual(c.el, terr[k(c.x, c.y)] || 'open'); });
+  log('New terrain generated');
+  playSound('buy');
+  render();
+}
+function randomTerrain() { if (!battleStarted) pushPaintUndo(); generateTerrain(); }
+function clickCell(x, y) {
+  if (paintMode) return;   // painting is handled on mouse down / drag
+  if (touchCellTap(x, y)) return;
+  if (cur && cur.pl === 1 && cur.ap >= 1 && !attackMode) {
+    if (playerDeploysFirst && !units.some(u => u.pl === 2)) {
+      setBanner('Press End Turn / New Round first so AI can deploy');
+      return;
+    }
+    refreshVision();
+    const ovType = canRamNow(cur);
+    const reach = moveCells(cur, { overrun: ovType, fog: true });
+    const nodeC = reach.get(k(x, y));
+    const cost = nodeC ? Math.max(1, Math.ceil(nodeC.cost / perAp(cur))) : 1;   // 1 AP per move, more for the slow stuff
+    if (nodeC && cur.ap >= cost) {
+      const hid = hiddenOnPath(reach, x, y, ovType);
+      if (hid) {
+        ghosts[hid.id] = { x: hid.x, y: hid.y, ty: 'soldier', round: roundNum, unk: true };
+        log('Contact! Something is blocking the way.');
+        render();
+        return;
+      }
+      recordMove(cur);
+      if (cur.slowed) { log(cur.n + ' is slowed'); cur.slowed--; }
+      cur.face = angleTo(cur, { x, y });
+      cur.x = x; cur.y = y; cur.ap -= cost;
+      log(cur.n + ' repositions (' + cost + ' AP, ' + cur.ap + ' left)'); playSound('move');
+      if (!afterPlayerMove(cur)) return;
+      render(); ui(); showRadial();
+      setBanner(cur.n + ' — AP ' + cur.ap + ' left');
+    }
+  }
+}
+function buy(type, pl) {
+  const t = types[type];
+  if (!t) return;
+  if (t.unlock && kills < t.unlock && pl === 1) { log('Need ' + t.unlock + ' kills to unlock ' + t.n); return; }
+  if (pl === 1 && pm < t.c) { log('Not enough points'); return; }
+  if (pl === 2 && am < t.c) return;
+  let x = pl === 1 ? 1 : COLS - 2, y = 2;
+  let placed = false;
+  for (let i = 0; i < ROWS * 2; i++) {
+    if (!units.some(u => u.x === x && u.y === y) && !imp(x, y)) { placed = true; break; }
+    y = (y + 1) % ROWS;
+    if (y === 0) x = pl === 1 ? Math.min(x + 1, 2) : Math.max(x - 1, COLS - 3);
+  }
+  if (!placed) { log('No free space to deploy'); return; }
+  if (pl === 1) pm -= t.c; else am -= t.c;
+  units.push({ id: uid++, ty: type, pl, n: t.n, i: t.i, x, y, mv: t.mv, rg: t.rg, at: t.at, df: t.df, hp: t.hp, mx: t.hp, gr: t.gr || 0, sp: !!t.sp, ap: t.ap, maxAp: t.ap, st: null, aim: 0, critBonus: 0, mines: t.mines || 0 });
+  playSound('buy');
+  ui();
+  render();
+  log('Bought ' + t.n);
+  if (playerDeploysFirst && !units.some(u => u.pl === 2) && pm < 10) {
+    setBanner('Units ready — press End Turn / New Round so AI can deploy');
+    log('Press End Turn / New Round to start');
+  }
+  if (units.length && !cur && !playerDeploysFirst) rebuild();
+}
+function imp(x, y) { return fx[terr[k(x, y)] || 'open'].i; }
+function coverPercent(u) {
+  let cover = fx[terr[k(u.x, u.y)] || 'open'].c || 0;
+  // adjacent cover
+  [[0,1],[1,0],[0,-1],[-1,0]].forEach(([dx,dy]) => {
+    const t = terr[k(u.x + dx, u.y + dy)] || 'open';
+    if (fx[t].c) cover += Math.floor(fx[t].c / 2);
+  });
+  cover = Math.max(0, Math.min(cover, 50) - (coverWear[k(u.x, u.y)] || 0));   // cover is chewed up by fire and shelling
+  if (types[u.ty] && types[u.ty].vehicle) cover = Math.floor(cover / 2);       // big targets can't hide as well
+  return cover;
+}
+function rebuild() {
+  const a = units.filter(u => u.pl === 1), b = units.filter(u => u.pl === 2);
+  queue = [];
+  for (let i = 0; i < Math.max(a.length, b.length); i++) { if (a[i]) queue.push(a[i]); if (b[i]) queue.push(b[i]); }
+  next();
+}
+function next() {
+  if (gameOver) return;
+  hideR(); attackMode = false; healMode = false;
+  document.getElementById('cancelBtn').style.display = 'none';
+  cur = queue.find(u => units.includes(u) && u.ap > 0) || null;
+  refreshVision();
+  if (cur) {
+    if (cur.pl === 1) log('→ ' + cur.n + ' (YOU) AP:' + cur.ap);
+    else logAI(cur, '→ ' + cur.n + ' (AI) AP:' + cur.ap);
+    if (cur.pl === 2 && aiOn) { setBanner('Enemy turn…'); setTimeout(aiDo, aiT(300)); }
+    else { updateBar(); setBanner(cur.n + ' — your turn (AP ' + cur.ap + ')'); }
+  } else {
+    setBanner('Round finished — press End Turn');
+    document.getElementById('btnEnd').classList.add('end-turn');
+  }
+  ui(); render(); updateBar(); updateUnitList();
+  announceTurn();
+}
+function updateBar() {
+  const isPlayer = cur && cur.pl === 1;
+  const ap = cur ? cur.ap : 0;
+  const cA = cur ? attackCost(cur, false) : 2, cAim = cur ? attackCost(cur, true) : 3;
+  document.getElementById('btnAttack').disabled = !isPlayer || ap < cA;
+  document.getElementById('btnAttack').textContent = '⚔️ Attack (' + cA + ')';
+  document.getElementById('btnAimed').disabled = !isPlayer || ap < cAim;
+  document.getElementById('btnAimed').textContent = '🎯 Aimed (' + cAim + ')';
+  document.getElementById('btnGren').disabled = !isPlayer || ap < 2 || !cur.gr;
+  document.getElementById('btnDefend').disabled = !isPlayer || ap < 1;
+  document.getElementById('btnAim').disabled = !isPlayer || ap < 1;
+  document.getElementById('btnOver').disabled = !isPlayer || ap < 1;
+  const isMedic = isPlayer && cur.ty === 'medic';
+  document.getElementById('btnHeal1').style.display = '';
+  document.getElementById('btnHeal2').style.display = '';
+  document.getElementById('btnHealFull').style.display = '';
+  document.getElementById('btnHeal1').disabled = !isMedic || ap < 1;
+  document.getElementById('btnHeal2').disabled = !isMedic || ap < 2;
+  document.getElementById('btnHealFull').disabled = !isMedic || ap < 3 || (cur.fullHealCd && cur.fullHealCd > roundNum);
+  document.getElementById('btnMine').style.display = '';
+  document.getElementById('btnMineField').style.display = '';
+  document.getElementById('btnMine').disabled = !(isPlayer && cur.ty === 'miner' && (cur.mines || 0) > 0 && ap >= 1);
+  document.getElementById('btnMineField').disabled = !(isPlayer && cur.ty === 'miner' && (cur.mines || 0) >= 3 && ap >= 3 && !(cur.fieldCd && cur.fieldCd > roundNum));
+  document.getElementById('btnUndo').disabled = !canUndo();
+  const isMed = isPlayer && cur.ty === 'medic', isMiner = isPlayer && cur.ty === 'miner';   // on phones, hide buttons this unit can never use
+  const na = (id, hide) => { document.getElementById(id).dataset.na = hide ? '1' : '0'; };
+  na('btnGren', !(isPlayer && cur.gr > 0)); na('btnHeal1', !isMed); na('btnHeal2', !isMed); na('btnHealFull', !isMed);
+  na('btnMine', !isMiner); na('btnMineField', !isMiner); na('btnUndo', !canUndo());
+  const endBtn = document.getElementById('btnEnd');
+  if (!cur || cur.pl !== 1) endBtn.classList.add('end-turn');
+  else endBtn.classList.remove('end-turn');
+}
+function render() {
+  objectiveSync();
+  document.querySelectorAll('.unit, .ghost').forEach(e => e.remove());
+  const b = document.getElementById('board');
+  refreshVision();
+  updateGhosts();
+  units.forEach(u => {
+    if (u.pl === 2 && !isVisible(u)) return;   // hidden by fog of war
+    const p = px(u.x, u.y);
+    const el = document.createElement('div');
+    el.className = 'unit pl' + u.pl + (cur && cur.id === u.id ? ' selected' : '');
+    el.dataset.id = u.id;
+    const face = u.face !== undefined ? u.face : (u.pl === 1 ? 0 : 180);
+    el.innerHTML = '<div class="sprite" style="transform:rotate(' + face + 'deg)">' + unitSVG(u.ty) + '</div><div class="hp-bar"><div class="hp-fill' + (u.hp <= u.mx / 3 ? ' low' : '') + '" style="width:' + (u.hp / u.mx * 100) + '%"></div></div>';
+    el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+    el.draggable = cur && cur.id === u.id && u.pl === 1 && !attackMode;
+    el.ondragstart = e => e.dataTransfer.setData('id', u.id);
+    el.onclick = e => {
+      e.stopPropagation();
+      if (touchTap(u, el)) return;                      // touch: first tap previews, second acts
+      if (u.pl === 1 && !attackMode && !healMode && cur && cur.pl === 1 && u.id !== cur.id) { selectUnit(u.id, true); return; }   // click your own unit to select it
+      onUnitClick(u);
+    };
+    el.onmouseenter = e => { if (lastPointerType !== 'mouse') return; hoverUnitId = u.id; showUnitTip(u, e); showHoverRadial(u); };      // touch uses tap-to-preview instead
+    el.onmouseleave = () => { if (lastPointerType !== 'mouse') return; if (hoverUnitId === u.id) hoverUnitId = null; radialTouch = performance.now(); hideUnitTip(); };
+    b.appendChild(el);
+  });
+  renderGhosts();
+  applyFog();
+  renderResources();
+  renderMines();
+  renderShells();
+  renderWear();
+  renderZones();
+  renderObjective();
+  trackSpotted();
+  highlight();
+  updateUnitList();
+}
+function showHoverRadial(u) {
+  // Moving the mouse across a neighbouring unit on the way to a menu button must not swap the menu away.
+  const now = performance.now();
+  if (radialFor !== null && radialFor !== u.id && now - radialTouch < 700) {
+    clearTimeout(pendingRadial);
+    pendingRadial = setTimeout(() => { if (hoverUnitId === u.id) buildHoverRadial(u); }, 650);
+    return;
+  }
+  buildHoverRadial(u);
+}
+function buildHoverRadial(u) {
+  hideHoverRadial();
+  if (!cur || cur.pl !== 1 || attackMode || healMode) return;
+  const acts = [];
+  const pct = o => ' ' + Math.round(o.chance * 100) + '%';
+  if (u.pl !== cur.pl && dist(cur, u) <= cur.rg && hasLOS(cur, u)) {
+    if (cur.ap >= attackCost(cur, false)) acts.push({ l: '⚔️ Attack' + pct(attackOdds(cur, u, false, false)), f: () => { hideHoverRadial(); beginAttack(0, false); } });
+    if (cur.ap >= attackCost(cur, true)) acts.push({ l: '🎯 Aimed' + pct(attackOdds(cur, u, true, false)), f: () => { hideHoverRadial(); beginAttack(0, true); } });
+    if (cur.gr > 0 && dist(cur, u) <= 2 && cur.ap >= 2) acts.push({ l: '💣 Grenade' + pct(attackOdds(cur, u, false, true)), f: () => { hideHoverRadial(); beginAttack(1, false); } });
+  }
+  if (u.pl !== cur.pl) {
+    const prep = ramPrep(cur, u);
+    if (prep) acts.push({ l: '🚜 Ram (2 AP)', f: () => { hideHoverRadial(); doRam(cur, u, prep); } });
+  }
+  if (u.pl === cur.pl && cur.ty === 'medic' && dist(cur, u) <= 2) {
+    if (cur.ap >= 1) acts.push({ l: '🩹 Heal 1', f: () => { hideHoverRadial(); beginHeal(1); } });
+    if (cur.ap >= 2) acts.push({ l: '🩹 Heal 2', f: () => { hideHoverRadial(); beginHeal(2); } });
+    if (cur.ap >= 3 && !(cur.fullHealCd && cur.fullHealCd > roundNum)) acts.push({ l: '🩹 Full', f: () => { hideHoverRadial(); beginHeal(99); } });
+  }
+  if (!acts.length) return;
+  // turn the menu so no button sits on a neighbouring unit
+  const blocked = [[0, -1, -90], [1, 0, 0], [0, 1, 90], [-1, 0, 180]]
+    .filter(([dx, dy]) => units.some(o => o.id !== u.id && o.x === u.x + dx && o.y === u.y + dy)).map(d => d[2]);
+  const angDiff = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+  let bestOff = 0, bestScore = -1e9;
+  for (let off = 0; off < 360; off += 15) {
+    let sc = 180;
+    acts.forEach((_, i) => { const ang = i / acts.length * 360 - 90 + off; blocked.forEach(bl => { sc = Math.min(sc, angDiff(ang, bl)); }); });
+    sc -= Math.min(off, 360 - off) * 0.02;
+    if (sc > bestScore) { bestScore = sc; bestOff = off; }
+  }
+  const p = px(u.x, u.y);
+  const rad = document.createElement('div');
+  rad.id = 'hoverRadial';
+  rad.style.cssText = `position:absolute;left:${p.x}px;top:${p.y}px;z-index:60;pointer-events:none;transform:scale(var(--inv,1));transform-origin:0 0;`;
+  acts.forEach((a, i) => {
+    const it = document.createElement('div');
+    it.className = 'radial-item';
+    it.textContent = a.l;
+    const ang = (i / acts.length) * Math.PI * 2 - Math.PI / 2 + bestOff * Math.PI / 180;
+    it.style.left = Math.cos(ang) * 92 + 'px';       // oval layout: wide buttons sit clear of the hovered unit
+    it.style.top = Math.sin(ang) * 56 + 'px';
+    it.onmouseenter = it.onmousemove = () => { radialTouch = performance.now(); clearTimeout(pendingRadial); };
+    it.onclick = e => { e.stopPropagation(); a.f(); };
+    rad.appendChild(it);
+  });
+  document.getElementById('board').appendChild(rad);
+  // keep every button inside the visible map (units near a screen edge, phones)
+  const cr = document.querySelector('.board-container').getBoundingClientRect();
+  const topMin = cr.top + (document.body.classList.contains('mobile') ? 62 : 6), f = zoom * Math.min(1.8, Math.max(0.7, 1 / zoom));
+  rad.querySelectorAll('.radial-item').forEach(it => {
+    const r = it.getBoundingClientRect();
+    let dx = 0, dy = 0;
+    if (r.left < cr.left + 6) dx = cr.left + 6 - r.left; else if (r.right > cr.right - 6) dx = cr.right - 6 - r.right;
+    if (r.top < topMin) dy = topMin - r.top; else if (r.bottom > cr.bottom - 6) dy = cr.bottom - 6 - r.bottom;
+    if (dx) it.style.left = (parseFloat(it.style.left) + dx / f) + 'px';
+    if (dy) it.style.top = (parseFloat(it.style.top) + dy / f) + 'px';
+  });
+  radialFor = u.id; radialTouch = performance.now();
+}
+function hideHoverRadial() {
+  clearTimeout(pendingRadial); radialFor = null;
+  const r = document.getElementById('hoverRadial');
+  if (r) r.remove();
+}
+document.getElementById('board').addEventListener('click', e => {
+  if (!e.target.closest('#hoverRadial')) hideHoverRadial();
+});
+function showUnitTip(u, e) {
+  hideUnitTip();
+  const tip = document.createElement('div');
+  tip.id = 'unitTip';
+  tip.className = 'tip-dark';
+  tip.style.cssText = 'position:fixed;z-index:200;pointer-events:none;';
+  let buffs = [];
+  if (u.critBonus) buffs.push('+' + Math.round(u.critBonus * 100) + '% crit');
+  if (u.st === 'defend') buffs.push('Defend (+2 DF)');
+  if (u.st === 'overwatch') buffs.push('Overwatch');
+  if (u.aim) buffs.push('Aim ready');
+  if (u.fullHealCd && u.fullHealCd > roundNum) buffs.push('Full Heal CD: ' + (u.fullHealCd - roundNum));
+  tip.innerHTML = `<b>${u.n}</b> <span style="color:${u.pl === 1 ? '#7ec3ff' : '#ff9a8a'}">(${u.pl === 1 ? 'You' : 'Enemy'})</span><br>HP ${u.hp}/${u.mx} · AP ${u.ap}/${u.maxAp} · Cover ${coverPercent(u)}%` +
+    (buffs.length ? '<br>' + buffs.join(', ') : '') + previewHTML(u);
+  document.body.appendChild(tip);
+  const move = ev => { tip.style.left = Math.min(ev.clientX + 14, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = Math.min(ev.clientY + 14, innerHeight - tip.offsetHeight - 8) + 'px'; };
+  move(e);
+  tip._move = move;
+  document.addEventListener('mousemove', move);
+  showFacingWedge(u);
+}
+function hideUnitTip() {
+  hideFacingWedge();
+  const tip = document.getElementById('unitTip');
+  if (tip) {
+    document.removeEventListener('mousemove', tip._move);
+    tip.remove();
+  }
+}
+function highlight() {
+  cells.forEach(c => c.el.classList.remove('in-range', 'move-range', 'move-range2', 'valid-target'));
+  if (!cur) return;
+  if (cur.pl === 2 && !isVisible(cur)) return;   // don't leak a hidden enemy's position
+  const mc = (cur.pl === 1 && cur.ap >= 1 && !attackMode) ? moveCells(cur, { overrun: canRamNow(cur), fog: true }) : new Map();
+  cells.forEach(c => {
+    const dd = dist(cur, c);
+    if (dd > 0 && dd <= cur.rg) c.el.classList.add('in-range');
+    const nd = mc.get(k(c.x, c.y));
+    if (nd) c.el.classList.add(nd.cost > perAp(cur) ? 'move-range2' : 'move-range');
+  });
+  if (attackMode) {
+    if (isGren) {
+      // highlight full grenade damage radius
+      cells.forEach(c => {
+        if (dist(cur, c) <= 2) c.el.classList.add('valid-target');
+      });
+    } else {
+      units.filter(u => u.pl !== cur.pl && isVisible(u) && dist(cur, u) <= cur.rg && hasLOS(cur, u))
+        .forEach(u => { const c = cells.find(z => z.x === u.x && z.y === u.y); if (c) c.el.classList.add('valid-target'); });
+    }
+  }
+}
+document.getElementById('board').ondragover = e => e.preventDefault();
+document.getElementById('board').ondrop = e => {
+  e.preventDefault();
+  if (!cur || cur.pl !== 1 || attackMode || cur.ap < 1) return;
+  const rct = document.getElementById('board').getBoundingClientRect();
+  const mx = (e.clientX - rct.left) / zoom, my = (e.clientY - rct.top) / zoom;
+  let best = null, bd = 999;
+  cells.forEach(c => { const p = px(c.x, c.y); const dd = Math.hypot(p.x - mx, p.y - my); if (dd < bd && dd < 30) { bd = dd; best = c; } });
+  if (!best) return;
+  clickCell(best.x, best.y);
+};
+function afterPlayerMove(u) {
+  checkPickup(u);
+  checkMines(u);
+  if (!units.includes(u)) { moveHistory = moveHistory.filter(h => h.id !== u.id); render(); ui(); next(); return false; }
+  checkOverrun(u);
+  checkOverwatch(u);
+  if (!units.includes(u)) { moveHistory = moveHistory.filter(h => h.id !== u.id); render(); ui(); next(); return false; }
+  // A move can only be undone if it had no side effects and revealed nothing new
+  const e = lastMoveFor(u.id);
+  if (e) {
+    refreshVision();
+    const spottedNew = units.some(x => x.pl === 2 && isVisible(x) && !e.seen.includes(x.id));
+    if (u.hp !== e.hp || resources.length !== e.res || mines.length !== e.mines || units.length !== e.nUnits || u.ap >= e.ap || spottedNew) {
+      moveHistory = moveHistory.filter(h => h.id !== u.id);
+    }
+  }
+  return true;
+}
+function showRadial() { updateBar(); }
+function hideR() {}
+function stance(s) {
+  if (!cur || cur.pl !== 1) return;
+  clearUndo(cur.id);
+  cur.ap = 0;
+  cur.st = s;
+  if (s === 'aim') { cur.aim = 1; cur.critBonus = 0.25; }
+  if (s === 'overwatch') log(cur.n + ' sets OVERWATCH — will react if an enemy moves into range');
+  else log(cur.n + ' uses ' + s + ' (ends turn)');
+  ui();
+  setTimeout(next, 150);
+}
+function beginAttack(gren, aimed) {
+  const cost = attackCost(cur, aimed);
+  if (cur.ap < cost) { log('Not enough AP'); return; }
+  attackMode = true; isGren = gren; isAimed = aimed;
+  hideR();
+  setBanner((aimed ? 'AIMED SHOT' : gren ? 'GRENADE' : 'ATTACK') + ' — click red enemy or Cancel');
+  document.getElementById('cancelBtn').style.display = 'block';
+  highlight();
+}
+function beginHeal(amt) {
+  const cost = amt === 1 ? 1 : amt === 2 ? 2 : 3;
+  if (!cur || cur.ap < cost) { log('Not enough AP'); return; }
+  if (amt === 99 && cur.fullHealCd && cur.fullHealCd > roundNum) {
+    log('Full Heal on cooldown (' + (cur.fullHealCd - roundNum) + ' rounds left)');
+    return;
+  }
+  healMode = true; healAmt = amt; attackMode = false;
+  hideR();
+  setBanner('HEAL — click a friendly unit (or Cancel)');
+  document.getElementById('cancelBtn').style.display = 'block';
+  highlight();
+}
+function doHeal(target) {
+  if (healAmt === 99) {
+    const full = target.hp >= target.mx;
+    confirmAction('Use Full Heal?',
+      (full ? target.n + ' is already at full health! ' : 'Fully heal ' + target.n + ' (' + target.hp + '/' + target.mx + ')? ') +
+      'Full Heal costs 3 AP and starts a 3-round cooldown.', 'Full Heal', () => doHealNow(target));
+    return;
+  }
+  doHealNow(target);
+}
+function doHealNow(target) {
+  const cost = healAmt === 1 ? 1 : healAmt === 2 ? 2 : 3;
+  if (cur.ap < cost) return;
+  if (healAmt === 99 && cur.fullHealCd && cur.fullHealCd > roundNum) return;
+  clearUndo(cur.id);
+  cur.ap -= cost;
+  const heal = healAmt === 99 ? (target.mx - target.hp) : Math.min(healAmt, target.mx - target.hp);
+  target.hp = Math.min(target.mx, target.hp + heal);
+  log(cur.n + ' heals ' + target.n + ' for ' + heal + ' HP');
+  if (healAmt === 99) {
+    cur.fullHealCd = roundNum + 3;
+    log('Full Heal cooldown: 3 rounds');
+  }
+  playSound('heal');
+  healMode = false;
+  document.getElementById('cancelBtn').style.display = 'none';
+  ui(); render();
+  if (cur.ap <= 0) setTimeout(next, 200); else updateBar();
+}
+function cancelAttack() {
+  attackMode = false; isGren = false; isAimed = false; healMode = false;
+  document.getElementById('cancelBtn').style.display = 'none';
+  setBanner(cur.n + ' — AP ' + cur.ap);
+  showRadial();
+  highlight();
+}
+function onUnitClick(u) {
+  // Tank ram: click an enemy the tank can reach to ram it
+  if (cur && cur.pl === 1 && !attackMode && !healMode && u.pl !== cur.pl) {
+    const prep = ramPrep(cur, u);
+    if (prep) { doRam(cur, u, prep); return; }
+  }
+  if (healMode && cur && u.pl === cur.pl) {
+    doHeal(u);
+    return;
+  }
+  if (!attackMode || !cur || u.pl === cur.pl) return;
+  const maxR = isGren ? 2 : cur.rg;
+  if (dist(cur, u) > maxR || (!isGren && !hasLOS(cur, u))) {
+    log('Out of range or blocked');
+    return;
+  }
+  const cost = attackCost(cur, isAimed);
+  if (cur.ap < cost) { log('Not enough AP'); return; }
+  cur.ap -= cost;
+  document.getElementById('cancelBtn').style.display = 'none';
+  doAttack(cur, u, isGren, isAimed);
+  attackMode = false; isAimed = false;
+}
+function doAttack(a, t, gren, aimed, noAdvance) {
+  if (a.pl === 1) clearUndo(a.id);
+  if (t) a.face = angleTo(a, t);
+  if (a.pl === 1 && aiFogActive()) { refreshAIVision(); if (!aiSees(a)) aiMemory[a.id] = { x: a.x, y: a.y, ty: a.ty, round: roundNum }; }
+  let unseenAtk = false;
+  if (a.pl === 2 && fogActive()) {
+    refreshVision();
+    unseenAtk = !isVisible(a);
+    if (unseenAtk) ghosts[a.id] = { x: a.x, y: a.y, ty: 'soldier', round: roundNum, unk: true };
+  }
+  const atkLabel = unseenAtk ? 'Unseen enemy' : `${a.n} (${a.ty})`;
+  let rolls = parse(a.at);
+  if (aimed) rolls = rolls.map(r => Math.min(6, r + 1)); // higher hit chance
+  let aimBonus = 0, chained = false;
+  if (a.aim) {
+    rolls.push(1 + Math.floor(Math.random() * 6));
+    aimBonus = 0.25; a.aim = 0;
+    a.critBonus = Math.max(0, (a.critBonus || 0) - 0.25);
+  }
+  const tot = rolls.reduce((x, y) => x + y, 0);
+  const fk = flankKind(a, t);                                          // front | side | rear
+  const cover = coverPercent(t);
+  const coverEff = fk === 'rear' ? Math.floor(cover / 2) : cover;     // nothing shelters you from behind
+  const defB = t.st === 'defend' ? 2 : 0;
+  const need = Math.max(1, t.df + Math.floor(coverEff / 5) + defB - FLANK_BONUS[fk]);
+  const sixHit = rolls.some(r => r >= 6);
+  const hit = tot >= need || sixHit;   // a natural 6 always hits, whatever the cover
+  log(`${atkLabel} ${aimed?'🎯':gren?'💣':'⚔️'} ${t.n} (${t.ty}) [${rolls.join(',')}] = ${tot} vs ${need} (cover ${cover}%${fk !== 'front' ? ', ' + (fk === 'rear' ? 'rear attack' : 'flank') : ''}) → ${hit?'HIT':'MISS'}${hit && tot < need ? ' (natural 6)' : ''}`);
+  if (cover > 0) wearCover(t);
+  playSound(attackSound(a, gren));
+  if (hit && t.pl === 1) buzz(60);
+  if (hit) {
+    if (t.ty === 'tank' || t.ty === 'flamer') playSound('tankhit');
+    else playSound('hit');
+  } else playSound('miss');
+  if (hit) {
+    t.hp -= dmgFor(a, t, gren);
+    if (a.ty === 'flamer') {
+      units.filter(u => u.pl !== a.pl && u.id !== t.id && dist(t, u) <= 1).forEach(s => splashHit(a, s, 1, 'Flame splash on '));
+    }
+    if (a.ty === 'arty') {
+      units.filter(u => u.pl !== a.pl && u.id !== t.id && dist(t, u) <= 2).forEach(s => splashHit(a, s, 2, 'Artillery blast on '));
+    }
+    const el = document.querySelector(`.unit[data-id="${t.id}"]`);
+    if (el) { el.classList.add('hit'); setTimeout(() => el.classList.remove('hit'), 350); }
+    if (gren) {
+      // splash damage to nearby enemies
+      units.filter(u => u.pl !== a.pl && dist(t, u) <= 1 && u.id !== t.id).forEach(s => splashHit(a, s, 1, 'Grenade splash on '));
+    }
+    if (t.hp <= 0) {
+      units = units.filter(x => x.id !== t.id);
+      log(t.n + ' destroyed');
+      playSound('destroy');
+      if (a.pl === 1) { 
+        kills++; 
+        pm += 8; 
+        updateUnlocks(); 
+        log('Kills: ' + kills + ' (+8 pts)'); 
+        ui();
+      }
+      if (!units.filter(u => u.pl !== a.pl).length) {
+        checkWin();
+        return;
+      }
+    } else log(t.n + ' HP ' + t.hp);
+    const critChance = 0.3 + (a.critBonus || 0) + aimBonus + (fk === 'rear' ? 0.1 : 0);
+    if (!gren && Math.random() < critChance) {
+      log('CRIT!');
+      a.critBonus = 0;
+      const nxt = units.find(u => u.pl !== a.pl && (a.pl === 2 || isVisible(u)) && dist(a, u) <= a.rg && hasLOS(a, u));
+      if (nxt && a.ap >= 2) { a.ap -= 2; chained = true; setTimeout(() => doAttack(a, nxt, 0, false, noAdvance), 350); }
+    }
+  }
+  if (units.includes(t)) t.face = angleTo(t, a);   // the target turns to face whoever shot it
+  if (gren) a.gr--;
+  if (chained) return;
+  if (noAdvance) { render(); ui(); updateBar(); return; }
+  if (a.pl === 2 || a.ap <= 0) {
+    setTimeout(next, a.pl === 2 ? aiT(250) : 250);
+  } else {
+    showRadial();
+    ui();
+    setBanner(a.n + ' — AP ' + a.ap + ' left');
+  }
+}
+function splashHit(a, s, dmg, label) {
+  s.hp -= dmg;
+  log(label + s.n);
+  if (s.hp <= 0) {
+    units = units.filter(x => x.id !== s.id);
+    log(s.n + ' destroyed');
+    playSound('destroy');
+    if (a.pl === 1) { kills++; pm += 8; updateUnlocks(); log('Kills: ' + kills + ' (+8 pts)'); ui(); }
+  }
+}
+function parse(s) { const m = s.match(/(\d+)d(\d+)/); if (!m) return [1 + Math.floor(Math.random() * 6)]; const a = []; for (let i = 0; i < +m[1]; i++) a.push(1 + Math.floor(Math.random() * +m[2])); return a; }
+function hasLOS(a, b) {
+  let x0 = a.x, y0 = a.y, x1 = b.x, y1 = b.y;
+  const highGround = terr[k(a.x, a.y)] === 'hill';   // standing on a hill lets you see over forest
+  const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx - dy;
+  while (x0 !== x1 || y0 !== y1) {
+    const e2 = 2 * err;
+    if (e2 > -dy) { err -= dy; x0 += sx; }
+    if (e2 < dx) { err += dx; y0 += sy; }
+    if (x0 === x1 && y0 === y1) break;
+    const t = terr[k(x0, y0)] || 'open';
+    if (fx[t].b && !(highGround && t === 'forest')) return false;
+  }
+  return true;
+}
+function checkOverwatch(mover) {
+  if (!mover) return;
+  const watchers = units.filter(u => u.pl !== mover.pl && u.st === 'overwatch');
+  for (const w of watchers) {
+    if (!units.includes(mover)) break;
+    let canSee;
+    if (mover.pl === 2) { refreshVision(); canSee = isVisible(mover); }
+    else { refreshAIVision(); canSee = aiSees(mover); }
+    if (canSee && dist(w, mover) <= w.rg && hasLOS(w, mover)) {
+      if (w.pl === 1) log(w.n + ' OVERWATCH reacts!'); else logAI(w, w.n + ' OVERWATCH reacts!');
+      playSound('overwatch');
+      w.st = null;
+      doAttack(w, mover, false, false, true);
+      break;
+    }
+  }
+}
+function newRound(first) {
+  if (!units.some(u => u.pl === 1)) { setBanner('Buy some units first'); return; }
+  if (!first && !battleStarted) { setBanner('Press Start Battle first'); return; }
+  if (!first && queue.some(u => units.includes(u) && u.ap > 0)) {
+    log('Round not finished — use or skip the remaining units first');
+    setBanner('Round not finished — finish or skip remaining units');
+    return;
+  }
+  if (playerDeploysFirst && !units.some(u => u.pl === 2)) {
+    spawnAIUnits();
+    log('AI deploys now');
+  }
+  if (first) {
+    battleStarted = true;
+    const tt = document.getElementById('terrainTools'); if (tt) tt.style.display = 'none';   // terrain is locked in battle
+    const sg = document.getElementById('setupGuide'); if (sg) sg.style.display = 'none';
+    const sh = document.getElementById('shopBox'); if (sh) sh.open = false;
+  } else { roundNum++; pm += 5; if (scoreHill() === false) return; if (runRoundEvents() === false) return; }
+  // Miners regenerate a mine every 2 rounds
+  units.forEach(u => {
+    u.ap = u.maxAp;
+    u.rammed = false;
+    if (u.st !== 'overwatch') u.st = null;
+    if (u.ty === 'miner' && roundNum % 2 === 0) {
+      u.mines = (u.mines || 0) + 1;
+      if (u.mines > 3) u.mines = 3;
+    }
+  });
+  moveHistory = []; lastTurnOwner = null; pendingRound = true; paintMode = null;
+  rebuild();
+  log(first ? 'Battle begins — round 1' : 'New round ' + roundNum + ' (+5 pts)');
+  ui();
+  setBanner('Your turn');
+}
+const STANCE_LABEL = { overwatch: '👁 Overwatch', defend: '🛡 Defending', aim: '🎯 Aiming' };
+function unitCardHTML(u) {
+  const pct = Math.max(0, u.hp / u.mx * 100);
+  const pips = '<span class="pip on"></span>'.repeat(Math.max(0, u.ap)) + '<span class="pip"></span>'.repeat(Math.max(0, u.maxAp - u.ap));
+  const chips = [];
+  if (u.st && STANCE_LABEL[u.st]) chips.push(STANCE_LABEL[u.st]);
+  if (u.ty === 'miner') chips.push('💣 ' + (u.mines || 0) + ' mines');
+  if (u.gr) chips.push('🧨 ' + u.gr + (u.gr > 1 ? ' grenades' : ' grenade'));
+  return `<div class="uc tm${u.pl}">
+    <div class="uc-art">${unitSVG(u.ty)}</div>
+    <div>
+      <div class="uc-name">${u.n}<span class="uc-tag">${u.pl === 1 ? 'YOU' : 'AI'}</span></div>
+      <div class="bar"><i class="${pct <= 33 ? 'low' : ''}" style="width:${pct}%"></i><b>HP ${u.hp}/${u.mx}</b></div>
+      <div class="uc-ap">${pips}<span>AP ${u.ap}/${u.maxAp}</span></div>
+    </div>
+    <div class="uc-stats"><span title="Cover">🛡 ${coverPercent(u)}%</span><span title="Attack range">🎯 ${u.rg}</span><span title="Sight range">👁 ${visionRange(u)}</span><span title="Attack dice">⚔ ${u.at}</span></div>
+    ${chips.length ? '<div class="uc-chips">' + chips.map(c => '<em>' + c + '</em>').join('') + '</div>' : ''}
+  </div>`;
+}
+const SHOP_ORDER = ['soldier', 'mg', 'sniper', 'scout', 'medic', 'engineer', 'miner', 'heavy', 'tank', 'flamer', 'arty'];
+function buildShop() {
+  const host = document.getElementById('shop');
+  if (!host) return;
+  host.innerHTML = '';
+  SHOP_ORDER.forEach(key => {
+    const t = types[key];
+    const b = document.createElement('button');
+    b.className = 'shop-card tm1';
+    b.id = key === 'flamer' ? 'btnFlamer' : key === 'arty' ? 'btnArty' : 'shop-' + key;
+    b.dataset.key = key;
+    b.title = t.n + '\nHP ' + t.hp + ' · Attack ' + t.at + ' · Range ' + t.rg + ' · AP ' + t.ap + (t.unlock ? '\nUnlocks after ' + t.unlock + ' kills' : '');
+    b.onclick = () => buy(key, 1);
+    b.innerHTML = '<span class="sc-art">' + unitSVG(key) + '</span><span class="sc-name">' + t.n + '</span><span class="sc-cost"></span>';
+    host.appendChild(b);
+  });
+  updateShop();
+}
+function updateShop() {
+  document.querySelectorAll('.shop-card').forEach(b => {
+    const t = types[b.dataset.key];
+    const left = t.unlock ? Math.max(0, t.unlock - kills) : 0;
+    b.classList.toggle('locked', left > 0);
+    b.classList.toggle('poor', left === 0 && pm < t.c);
+    b.querySelector('.sc-cost').textContent = left > 0 ? '🔒 ' + left + ' more kill' + (left > 1 ? 's' : '') : t.c + ' pts';
+  });
+}
+function ui() {
+  document.getElementById('pm').textContent = pm;
+  document.getElementById('am').textContent = am;
+  const c = document.getElementById('cur');
+  if (cur && cur.pl === 2 && fogActive() && (refreshVision(), !isVisible(cur))) { c.className = 'current-unit empty'; c.textContent = '⏳ Enemy is moving…'; }
+  else if (cur) { c.className = 'current-unit'; c.innerHTML = unitCardHTML(cur); }
+  else { c.className = 'current-unit empty'; c.textContent = battleStarted ? 'Round over — press End Turn' : 'No active unit'; }
+  updateShop();
+  updateSetupBar();
+  updateObjectiveCard();
+  updateMobChip();
+}
+let playerDeploysFirst = false, battleStarted = false;
+function showModal(title, bodyHtml, buttons) {
+  let ov = document.getElementById('setupPopup');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'setupPopup';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;';
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = `<div class="modal-box">
+    <h3 style="margin:0 0 8px;">${title}</h3>${bodyHtml}<div class="modal-btns" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;"></div></div>`;
+  const box = ov.querySelector('.modal-btns');
+  buttons.forEach(bt => {
+    const el = document.createElement('button');
+    el.textContent = bt.label;
+    if (bt.id) el.id = bt.id;
+    el.style.cssText = 'width:auto;padding:8px 20px;font-size:14px;' + (bt.style || '');
+    el.onclick = () => { if (!bt.keepOpen) ov.style.display = 'none'; if (bt.fn) bt.fn(); };
+    box.appendChild(el);
+  });
+  ov.style.display = 'flex';
+}
+function showPopup(title, msg, btnLabel, onOk) {
+  showModal(title, `<p style="margin:0 0 12px;font-size:14px;">${msg}</p>`, [{ label: btnLabel, id: 'popupOk', fn: onOk }]);
+}
+function showConfirm(title, msg, yesLabel, onYes) {
+  showModal(title, `<p style="margin:0 0 12px;font-size:14px;">${msg}</p>`,
+    [{ label: 'Cancel', id: 'popupCancel' }, { label: yesLabel, id: 'popupOk', style: 'background:#e67e22;font-weight:bold;', fn: onYes }]);
+}
+function confirmAction(title, msg, yesLabel, fn) {
+  if (!opt('optConfirm')) { fn(); return; }
+  showConfirm(title, msg, yesLabel, fn);
+}
+function showStartScreen() {
+  showModal('🪖 Toy Soldiers',
+    '<p style="margin:0 0 6px;font-size:14px;">Buy your squad and outsmart the AI.</p>' +
+    '<div style="margin:8px 0 4px;font-size:12px;color:#b9bfa0;">Map size</div>' +
+    '<div style="display:flex;gap:6px;justify-content:center;margin-bottom:10px;">' +
+    ['small', 'medium', 'large'].map(z => `<button class="sz${z === mapSize ? ' active' : ''}" data-s="${z}" onclick="setMapSize('${z}')">${z[0].toUpperCase() + z.slice(1)}</button>`).join('') + '</div>' +
+    '<div style="margin:2px 0 4px;font-size:12px;color:#b9bfa0;">AI difficulty</div>' +
+    '<div style="display:flex;gap:6px;justify-content:center;margin-bottom:10px;">' +
+    ['easy', 'normal', 'hard'].map(z => `<button class="sz lv${z === aiLevel ? ' active' : ''}" data-l="${z}" onclick="setAiLevel('${z}')">${z[0].toUpperCase() + z.slice(1)}</button>`).join('') + '</div>' +
+    '<div style="margin:2px 0 4px;font-size:12px;color:#b9bfa0;">Mode</div>' +
+    '<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;">' +
+    ['elim', 'hill', 'ctf'].map(z => `<button class="sz md${z === objective ? ' active' : ''}" data-m="${z}" title="${OBJECTIVES[z].desc}" onclick="setObjective('${z}')">${OBJECTIVES[z].short}</button>`).join('') + '</div>' +
+    '<p style="margin:0 0 12px;font-size:12px;color:#b9bfa0;">Fog of war applies to you <b>and</b> the AI: you only see what your units can see. Change this and more under ⚙️ Settings.</p>',
+    [{ label: '🎲 New map', keepOpen: true, fn: () => randomTerrain() },
+     { label: '🛠️ Create map', fn: enterCreator },
+     { label: '📂 Load game', fn: showLoadDialog },
+     { label: '⚔️ Start vs AI', id: 'startBtn', style: 'background:#27ae60;color:#fff;font-weight:bold;', fn: startAI }]);
+}
+function updateSetupBar() {
+  const g = document.getElementById('setupGuide');
+  if (g) {
+    const has = units.some(u => u.pl === 1);
+    g.querySelector('[data-s="1"]').className = has ? 'done' : 'now';
+    g.querySelector('[data-s="2"]').className = has ? 'now' : '';
+  }
+  const b = document.getElementById('setupBar');
+  if (b) b.style.display = (aiOn && !battleStarted && units.some(u => u.pl === 1)) ? 'block' : 'none';
+}
+function startAI() {
+  aiOn = true;
+  pm = 100; am = AI_LEVELS[aiLevel].pts;
+  coverWear = {}; shells = [];
+  initObjective();
+  units = [];
+  cur = null;
+  kills = 0;
+  roundNum = 1;
+  battleStarted = false;
+  mines = [];
+  aiMemory = {}; ghosts = {}; seenIds = new Set();
+  const ov = document.getElementById('winOverlay');
+  if (ov) ov.style.display = 'none';
+
+  playerDeploysFirst = Math.random() < 0.5;
+  const rollMsg = playerDeploysFirst ? 'You deploy FIRST' : 'AI deploys FIRST';
+  log('🎲 ' + rollMsg);
+  setBanner(rollMsg);
+
+  if (!playerDeploysFirst) spawnAIUnits();
+  ui();
+  render();
+  spawnResources();
+  updateUnlocks();
+
+  showPopup(
+    '🎲 ' + rollMsg,
+    playerDeploysFirst
+      ? 'Buy your units on the left, then press the green Start Battle button.'
+      : 'AI has deployed. Buy your units, then press the green Start Battle button.',
+    'OK',
+    () => setBanner(rollMsg + ' — buy units, then press Start Battle')
+  );
+}
+function doneBuying() {
+  if (battleStarted) { log('Battle already started'); return; }
+  if (!units.some(u => u.pl === 1)) { log('Buy at least one unit'); return; }
+  if (playerDeploysFirst && !units.some(u => u.pl === 2)) spawnAIUnits();
+  showPopup('Ready?', 'Both sides are deployed. Start the battle?', 'Start Game', () => {
+    setBanner('Battle started');
+    const t = document.getElementById('terrainTools');
+    if (t) t.open = false;
+    newRound(true);
+  });
+}
+function spawnAIUnits() {
+  const p = aiFogActive() ? [] : units.filter(u => u.pl === 1);   // under fog the AI deploys blind
+  const tanks = p.filter(u => u.ty === 'tank' || u.ty === 'flamer').length;
+  const snipers = p.filter(u => u.ty === 'sniper').length;
+  const medics = p.filter(u => u.ty === 'medic').length;
+  const infantry = p.filter(u => u.ty === 'soldier' || u.ty === 'scout' || u.ty === 'heavy').length;
+
+  let aiList = ['soldier', 'mg', 'medic'];
+  // Counter tanks with mines
+  if (tanks >= 1) aiList.push('miner', 'miner');
+  else aiList.push('miner');
+  // Counter snipers with more infantry / scout
+  if (snipers >= 1) aiList.push('soldier', 'scout');
+  // Always bring a sniper if they have soft targets
+  if (infantry >= 2) aiList.push('sniper');
+  else aiList.push('soldier');
+  // Extra medic if they have one
+  if (medics >= 1 && aiList.length < 6) aiList.push('medic');
+  // Fill to 6
+  while (aiList.length < 6) aiList.push('soldier');
+  aiList = aiList.slice(0, 6);
+
+  const candidates = [];
+  for (let x = COLS - 1; x >= COLS - 4; x--) {
+    for (let y = 0; y < ROWS; y++) {
+      if (!imp(x, y) && !units.some(u => u.x === x && u.y === y)) candidates.push({ x, y });
+    }
+  }
+  candidates.sort(() => Math.random() - 0.5);
+  let placed = 0;
+  for (const ty of aiList) {
+    if (placed >= candidates.length) break;
+    const t = types[ty];
+    if (!t || am < t.c) continue;
+    const spot = candidates[placed];
+    am -= t.c;
+    units.push({
+      id: uid++, ty, pl: 2, n: t.n, i: t.i, x: spot.x, y: spot.y,
+      mv: t.mv, rg: t.rg, at: t.at, df: t.df, hp: t.hp, mx: t.hp,
+      gr: t.gr || 0, sp: !!t.sp, ap: t.ap, maxAp: t.ap, st: null, aim: 0, critBonus: 0, mines: t.mines || 0
+    });
+    placed++;
+  }
+  const miners = units.filter(u => u.pl === 2 && u.ty === 'miner').length;
+  log(fogActive() ? 'AI has deployed its forces' : 'AI spawned ' + placed + ' units (' + miners + ' Mine Specialists)');
+  render();
+  ui();
+}
+function endTurnOrNew() {
+  if (cur && cur.pl === 1) {
+    skipUnit();
+  } else {
+    newRound();
+  }
+}
+function skip() {
+  if (!cur) { log('No active unit'); return; }
+  clearUndo(cur.id);
+  cur.ap = 0;
+  log(cur.n + ' skipped');
+  next();
+}
+function aiBuy() {
+  const prefs = [
+    { t: 'soldier', w: 4 }, { t: 'mg', w: 2 },
+    { t: 'medic', w: 2 }, { t: 'sniper', w: 2 }, { t: 'scout', w: 2 },
+    { t: 'heavy', w: 1 }, { t: 'engineer', w: 1 }
+  ];
+  let attempts = 0;
+  while (am >= 10 && attempts++ < 12) {
+    const aff = prefs.filter(p => types[p.t] && types[p.t].c <= am);
+    if (!aff.length) break;
+    let tot = aff.reduce((a, p) => a + p.w, 0);
+    let r = Math.random() * tot;
+    let ch = aff[0].t;
+    for (const p of aff) { r -= p.w; if (r <= 0) { ch = p.t; break; } }
+    const before = units.length;
+    buy(ch, 2);
+    if (units.length === before) {
+      // force a placement if buy failed
+      const t = types[ch];
+      if (t && am >= t.c) {
+        for (let y = 0; y < ROWS; y++) {
+          const x = COLS - 2;
+          if (!units.some(u => u.x === x && u.y === y) && !imp(x, y)) {
+            am -= t.c;
+            units.push({ id: uid++, ty: ch, pl: 2, n: t.n, i: t.i, x, y, mv: t.mv, rg: t.rg, at: t.at, df: t.df, hp: t.hp, mx: t.hp, gr: t.gr || 0, sp: !!t.sp, ap: t.ap, maxAp: t.ap, st: null, aim: 0, critBonus: 0 });
+            log('AI deployed ' + t.n);
+            break;
+          }
+        }
+      }
+    }
+  }
+  render();
+  ui();
+  log('AI has ' + units.filter(u => u.pl === 2).length + ' units');
+}
+function aiDo() {
+  if (gameOver) return;
+  if (!cur || cur.pl !== 2) { setTimeout(next, aiT(100)); return; }
+  if (!units.some(u => u.pl === 1)) return;
+  cur.aiMined = false;
+  aiTurnStep(0);
+}
+function aiFinish() {
+  if (!cur || !units.includes(cur)) { setTimeout(next, aiT(300)); return; }
+  if (cur.ap >= 2 && Math.random() < 0.4 && cur.ty !== 'medic') { cur.st = 'overwatch'; logAI(cur, cur.n + ' sets OVERWATCH'); }
+  cur.ap = 0;
+  setTimeout(next, aiT(300));
+}
+function aiTurnStep(n) {
+  if (gameOver) return;
+  if (!cur || cur.pl !== 2 || !units.includes(cur)) { setTimeout(next, aiT(150)); return; }
+  if (cur.ap <= 0 || n > 8) { aiFinish(); return; }
+  const again = () => setTimeout(() => aiTurnStep(n + 1), aiT(380));
+  aiUpdateMemory();
+  const known = aiKnown();
+  const visible = known.filter(e => e.live).map(e => e.unit);
+  const allies = units.filter(u => u.pl === 2 && u.id !== cur.id);
+  const knownTanks = known.filter(e => e.ty === 'tank' || e.ty === 'flamer').sort((a, b) => dist(cur, a) - dist(cur, b));
+
+  // Miner: lay mines when a tank is known to be close
+  if (cur.ty === 'miner' && (cur.mines || 0) > 0 && cur.ap >= 1 && !cur.aiMined && knownTanks.length && dist(cur, knownTanks[0]) <= 5) {
+    const tank = knownTanks[0];
+    cur.aiMined = true;
+    if ((cur.mines || 0) >= 3 && cur.ap >= 3 && !(cur.fieldCd && cur.fieldCd > roundNum)) {
+      cur.ap -= 3; cur.mines -= 3; cur.fieldCd = roundNum + 3;
+      let placed = 0;
+      [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [-1, -1]].forEach(([dx, dy]) => {
+        const x = cur.x + dx, y = cur.y + dy;
+        if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return;
+        if (imp(x, y) || mines.some(m => m.x === x && m.y === y)) return;
+        if (units.some(u => u.x === x && u.y === y)) return;
+        mines.push({ x, y, pl: 2 }); placed++;
+      });
+      logAI(cur, cur.n + ' deploys Mine Field (' + placed + ' mines)');
+      playSound('minelay'); render(); again(); return;
+    }
+    let bestMine = null, bestScore = -999;
+    cells.forEach(c => {
+      if (imp(c.x, c.y) || mines.some(m => m.x === c.x && m.y === c.y) || units.some(u => u.x === c.x && u.y === c.y)) return;
+      const dh = dist(cur, c); if (dh > 2) return;
+      const td = dist(tank, c), score = 10 - td - dh * 0.5;
+      if (score > bestScore && td <= 4) { bestScore = score; bestMine = c; }
+    });
+    if (bestMine) {
+      mines.push({ x: bestMine.x, y: bestMine.y, pl: 2 });
+      cur.mines--; cur.ap--;
+      logAI(cur, cur.n + ' drops a mine in tank path (' + cur.mines + ' left)');
+      playSound('minelay'); render(); again(); return;
+    }
+  }
+
+  // Medic: heal a hurt ally in reach
+  const hurt = allies.filter(a => a.hp < a.mx).sort((a, b) => (a.hp / a.mx) - (b.hp / b.mx));
+  if (cur.ty === 'medic' && cur.ap >= 1 && hurt.length && dist(cur, hurt[0]) <= 2) {
+    const target = hurt[0];
+    const amt = cur.ap >= 3 && target.hp <= target.mx / 2 ? 99 : cur.ap >= 2 ? 2 : 1;
+    const cost = amt === 99 ? 3 : amt;
+    if (cur.ap >= cost) {
+      cur.ap -= cost;
+      const heal = amt === 99 ? (target.mx - target.hp) : Math.min(amt, target.mx - target.hp);
+      target.hp = Math.min(target.mx, target.hp + heal);
+      logAI(cur, cur.n + ' heals ' + target.n + ' for ' + heal);
+      playSound('heal'); render();
+      setTimeout(next, aiT(300));
+      return;
+    }
+  }
+
+  // Attack: only enemies the AI can actually see
+  if (cur.ap >= 2) {
+    const tgts = visible.filter(e => dist(cur, e) <= cur.rg && hasLOS(cur, e));
+    if (tgts.length) {
+      tgts.sort((a, b) => ((a.hp / a.mx) - (a.ty === 'medic' ? 0.5 : 0) - coverPercent(a) / 100) - ((b.hp / b.mx) - (b.ty === 'medic' ? 0.5 : 0) - coverPercent(b) / 100));
+      const lv = AI_LEVELS[aiLevel], apNow = cur.ap;
+      const pick = Math.random() < lv.blunder ? tgts[Math.floor(Math.random() * tgts.length)] : tgts[0];
+      cur.ap = 0;
+      doAttack(cur, pick, false, cur.ty === 'sniper' || (aiLevel === 'hard' && apNow >= attackCost(cur, true)));
+      return;
+    }
+  }
+
+  // Movement: retreat / engage what it sees / investigate last-known positions / search
+  const lowHp = cur.hp <= cur.mx * 0.4;
+  const nearTank = knownTanks.find(t => dist(cur, t) <= 4);
+  let goal = null, mode = 'engage', threats = [];
+  const objGoal = aiObjectiveGoal(cur);
+  const shellDanger = shells.find(sh => dist(cur, sh) <= sh.r);
+  if (shellDanger) {
+    mode = 'retreat'; threats = shells.map(sh => ({ x: sh.x, y: sh.y })); goal = { x: cur.x, y: cur.y };   // get out of the marked zone
+  } else if (objGoal && objGoal.carry) {
+    goal = objGoal;                 // flag carrier: run for home
+  } else if ((nearTank || lowHp) && known.length) {
+    mode = 'retreat'; threats = nearTank ? knownTanks : known; goal = { x: cur.x, y: cur.y };
+  } else if (cur.ty === 'medic') {
+    const mate = hurt[0] || allies.filter(a => a.ty !== 'medic').sort((a, b) => dist(cur, a) - dist(cur, b))[0];
+    if (mate && dist(cur, mate) > (hurt[0] ? 2 : 3)) goal = { x: mate.x, y: mate.y };
+  } else if (objGoal === 'hold') {
+    aiFinish(); return;             // sitting on the objective
+  } else if (objGoal) {
+    goal = objGoal;
+  } else if (visible.length) {
+    const tgt = visible.slice().sort((a, b) => dist(cur, a) - dist(cur, b))[0];
+    if (dist(cur, tgt) <= cur.rg && hasLOS(cur, tgt)) { aiFinish(); return; }   // already in position
+    goal = { x: tgt.x, y: tgt.y };
+  } else {
+    const mem = known.filter(e => !e.live).sort((a, b) => dist(cur, a) - dist(cur, b))[0];
+    if (mem) { goal = { x: mem.x, y: mem.y }; mode = 'investigate'; }
+    else { goal = aiSearchGoal(cur); mode = 'search'; }
+  }
+  if (goal && Math.random() < AI_LEVELS[aiLevel].hesitate) { aiFinish(); return; }
+  if (goal && aiMoveStep(goal, mode, threats)) {
+    if (!units.includes(cur)) { setTimeout(next, aiT(300)); return; }
+    again();
+    return;
+  }
+  aiFinish();
+}
+function checkWin() {
+  const p1 = units.filter(u => u.pl === 1).length;
+  const p2 = units.filter(u => u.pl === 2).length;
+  if (p1 === 0 && p2 > 0) {
+    setBanner('You lose');
+    playSound('lose');
+    showWinScreen(false);
+    return true;
+  }
+  if (p2 === 0 && p1 > 0) {
+    setBanner('🎉 YOU WIN! 🎉');
+    playSound('win');
+    showWinScreen(true);
+    return true;
+  }
+  return false;
+}
+function showWinScreen(won, msg) {
+  let overlay = document.getElementById('winOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'winOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:999;';
+    overlay.innerHTML = `<div style="background:#2c3e50;padding:24px;border-radius:12px;text-align:center;border:3px solid #f39c12;">
+      <h2 id="winTitle" style="margin:0 0 8px;color:#f39c12;"></h2>
+      <p id="winMsg" style="margin:0 0 14px;color:#ecf0f1;max-width:300px;"></p>
+      <button onclick="location.reload()" style="background:#27ae60;padding:12px 24px;font-size:16px;">🔄 Restart</button>
+    </div>`;
+    document.body.appendChild(overlay);
+  }
+  document.getElementById('winTitle').textContent = won ? '🎉 YOU WIN! 🎉' : '💀 You Lose';
+  document.getElementById('winMsg').textContent = msg || '';
+  gameOver = true;
+  overlay.style.display = 'flex';
+}
+let resources = [], mines = [];
+function dropMine() {
+  if (!cur || cur.ty !== 'miner' || (cur.mines || 0) <= 0 || cur.ap < 1) { log('Cannot drop mine'); return; }
+  if (mines.some(m => m.x === cur.x && m.y === cur.y)) { log('Mine already here'); return; }
+  clearUndo(cur.id);
+  mines.push({ x: cur.x, y: cur.y, pl: cur.pl });
+  cur.mines--;
+  cur.ap--;
+  log(cur.n + ' drops a mine (' + cur.mines + ' left)');
+  playSound('minelay');
+  updateBar();
+}
+function mineField() {
+  if (!cur || cur.ty !== 'miner') return;
+  if ((cur.fieldCd || 0) > roundNum) { log('Mine Field not ready (' + (cur.fieldCd - roundNum) + ' rounds)'); return; }
+  if (cur.ap < 3) { log('Need 3 AP for Mine Field'); return; }
+  if ((cur.mines || 0) < 3) { log('Need 3 mines'); return; }
+  confirmAction('Deploy Mine Field?', 'This costs 3 AP and 3 mines, and has a 3-round cooldown. The mines stay hidden until something steps on them.', 'Deploy', doMineField);
+}
+function doMineField() {
+  if (!cur || cur.ty !== 'miner') return;
+  if ((cur.fieldCd || 0) > roundNum) { log('Mine Field not ready (' + (cur.fieldCd - roundNum) + ' rounds)'); return; }
+  if (cur.ap < 3) { log('Need 3 AP for Mine Field'); return; }
+  if ((cur.mines || 0) < 3) { log('Need 3 mines'); return; }
+  cur.ap -= 3;
+  cur.mines -= 3;
+  cur.fieldCd = roundNum + 3;
+  const spots = [[0,1],[1,0],[0,-1],[-1,0],[1,1],[-1,-1]];
+  let placed = 0;
+  spots.forEach(([dx, dy]) => {
+    const x = cur.x + dx, y = cur.y + dy;
+    if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return;
+    if (imp(x, y) || mines.some(m => m.x === x && m.y === y)) return;
+    if (units.some(u => u.x === x && u.y === y)) return;
+    mines.push({ x, y, pl: cur.pl });
+    placed++;
+  });
+  clearUndo(cur.id);
+  log(cur.n + ' deploys Mine Field (' + placed + ' mines) — 3 round cooldown');
+  playSound('minelay');
+  updateBar();
+}
+function renderMines() {
+  document.querySelectorAll('.mine').forEach(e => e.remove());
+  const b = document.getElementById('board');
+  mines.filter(m => m.pl === 1).forEach(m => {         // you can see your own mines; the enemy's stay hidden
+    const p = px(m.x, m.y);
+    const el = document.createElement('div');
+    el.className = 'mine';
+    el.title = 'Your mine';
+    el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+    el.innerHTML = '<svg width="22" height="22" viewBox="0 0 22 22"><path d="M11 1v5M11 16v5M1 11h5M16 11h5M4 4l3.5 3.5M14.5 14.5L18 18M18 4l-3.5 3.5M7.5 14.5L4 18" style="stroke:#111;stroke-width:1.8;stroke-linecap:round"/><circle cx="11" cy="11" r="6.5" style="fill:#3a3a3a;stroke:#111;stroke-width:1.2"/><circle cx="11" cy="11" r="2.2" style="fill:#e0645a"/></svg>';
+    b.appendChild(el);
+  });
+}
+function checkMines(u) {
+  const idx = mines.findIndex(m => m.x === u.x && m.y === u.y && m.pl !== u.pl);
+  if (idx === -1) return;
+  mines.splice(idx, 1);
+  const isTank = u.ty === 'tank' || u.ty === 'flamer';
+  const dmg = isTank ? Math.ceil(u.mx * 0.75) : 4;
+  u.hp -= dmg;
+  if (isTank) {
+    u.ap = Math.max(0, u.ap - 2);
+    u.slowed = 2;
+    log(u.n + ' hits a MINE! -' + dmg + ' HP and slowed');
+  } else {
+    log(u.n + ' triggers a MINE! (-' + dmg + ' HP)');
+  }
+  playSound('mineboom');
+  if (u.hp <= 0) {
+    units = units.filter(x => x.id !== u.id);
+    log(u.n + ' destroyed by mine');
+    playSound('destroy');
+    if (u.pl === 2) { kills++; pm += 8; updateUnlocks(); }
+  }
+  checkWin();
+}
+function spawnResources() {
+  resources = [];
+  const types = ['ammo', 'medkit', 'scrap'];
+  for (let i = 0, nRes = Math.max(2, Math.round(COLS * ROWS / 35)); i < nRes; i++) {
+    let x, y, tries = 0;
+    do {
+      x = 3 + Math.floor(Math.random() * (COLS - 6));
+      y = Math.floor(Math.random() * ROWS);
+      tries++;
+    } while ((imp(x, y) || units.some(u => u.x === x && u.y === y) || resources.some(r => r.x === x && r.y === y)) && tries < 30);
+    if (tries < 30) resources.push({ x, y, type: types[i % 3] });
+  }
+  renderResources();
+}
+function renderResources() {
+  document.querySelectorAll('.resource').forEach(e => e.remove());
+  const b = document.getElementById('board');
+  resources.forEach(r => {
+    if (fogActive() && !visSet.has(k(r.x, r.y))) return;
+    const p = px(r.x, r.y);
+    const el = document.createElement('div');
+    el.className = 'resource';
+    el.textContent = r.type === 'ammo' ? '📦' : r.type === 'medkit' ? '➕' : '⚙️';
+    el.style.cssText = `position:absolute;left:${p.x}px;top:${p.y}px;transform:translate(-50%,-50%);font-size:16px;z-index:5;pointer-events:none;`;
+    b.appendChild(el);
+  });
+}
+function updateUnlocks() { updateShop(); }
+function checkOverrun() { /* ramming is handled by doRam() */ }
+function checkPickup(u) {
+  const idx = resources.findIndex(r => r.x === u.x && r.y === u.y);
+  if (idx === -1) return;
+  const r = resources[idx];
+  resources.splice(idx, 1);
+  if (r.type === 'ammo') { u.critBonus = (u.critBonus || 0) + 0.15; log(u.n + ' found Ammo (+crit)'); }
+  else if (r.type === 'medkit') { u.hp = Math.min(u.mx, u.hp + 2); log(u.n + ' found Medkit (+2 HP)'); }
+  else { u.ap = Math.min(u.maxAp, u.ap + 1); log(u.n + ' found Scrap (+1 AP)'); }
+  playSound('pickup');
+  renderResources();
+}
+function log(m) {
+  const l = document.getElementById('log');
+  if (!l) return;
+  const cls = /destroyed|killed/i.test(m) ? 'kill' : /\bMISS\b/.test(m) ? 'miss' : /\bHIT\b|damage|splash|blast/i.test(m) ? 'hit' : /^(→|New round|Battle begins|👁|ROUND)/.test(m) ? 'sys' : '';
+  l.insertAdjacentHTML('beforeend', '<div class="ll ' + cls + '">' + m + '</div>');
+  while (l.children.length > 250) l.removeChild(l.firstChild);
+  l.scrollTop = l.scrollHeight;
+}
+
+// ====================================================================
+// Fog of war, camera, turn flash, undo, AI speed
+// ====================================================================
+const VIS = { soldier: 5, mg: 6, tank: 5, medic: 4, sniper: 8, scout: 9, heavy: 4, engineer: 5, miner: 4, flamer: 4, arty: 5 };
+Object.keys(types).forEach(t => { types[t].vis = VIS[t] || 5; });
+
+const opt = id => { const e = document.getElementById(id); return !!(e && e.checked); };
+const fogActive = () => opt('optFog') && aiOn;
+function aiSpeed() { const e = document.getElementById('optSpeed'); return e ? e.value : 'normal'; }
+function aiT(ms) {
+  const f = aiSpeed() === 'instant' ? 0.05 : aiSpeed() === 'fast' ? 0.35 : 1;
+  return Math.max(20, Math.round(ms * f));
+}
+function onOptChange() { render(); }
+
+// --- vision -----------------------------------------------------------
+function visionRange(u) {
+  let v = (types[u.ty] && types[u.ty].vis) || 5;
+  if (terr[k(u.x, u.y)] === 'hill') v += 2;      // high ground sees further
+  if (u.pl === 2) v = Math.max(2, v + AI_LEVELS[aiLevel].vis);
+  return v;
+}
+function computeVision(pl) {
+  pl = pl || 1;
+  const set = new Set();
+  units.filter(u => u.pl === pl).forEach(u => {
+    const r = visionRange(u);
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.abs(dx) + Math.abs(dy) > r) continue;
+      const x = u.x + dx, y = u.y + dy;
+      if (x < 0 || y < 0 || x >= COLS || y >= ROWS) continue;
+      const key = k(x, y);
+      if (set.has(key)) continue;
+      if (hasLOS(u, { x, y })) set.add(key);
+    }
+  });
+  return set;
+}
+function refreshVision() { visSet = fogActive() ? computeVision() : new Set(); return visSet; }
+function isVisible(u) { return !fogActive() || u.pl === 1 || visSet.has(k(u.x, u.y)); }
+function logAI(u, msg) {
+  if (!fogActive()) { log(msg); return; }
+  refreshVision();
+  if (isVisible(u)) log(msg);
+}
+function applyFog() {
+  const on = fogActive();
+  cells.forEach(c => c.el.classList.toggle('fog', on && !visSet.has(k(c.x, c.y))));
+}
+function updateGhosts() {
+  if (!fogActive()) { ghosts = {}; return; }
+  Object.keys(ghosts).forEach(id => { if (!units.some(u => String(u.id) === id)) delete ghosts[id]; });
+  units.filter(u => u.pl === 2).forEach(u => {
+    if (visSet.has(k(u.x, u.y))) ghosts[u.id] = { x: u.x, y: u.y, ty: u.ty, round: roundNum };
+    else if (ghosts[u.id] && visSet.has(k(ghosts[u.id].x, ghosts[u.id].y))) delete ghosts[u.id];   // we can see the spot and it's gone
+  });
+}
+function renderGhosts() {
+  if (!fogActive() || !opt('optGhost')) return;
+  const b = document.getElementById('board');
+  Object.keys(ghosts).forEach(id => {
+    const g = ghosts[id];
+    const u = units.find(x => String(x.id) === id);
+    if (!u || isVisible(u)) return;
+    const p = px(g.x, g.y);
+    const el = document.createElement('div');
+    el.className = 'ghost';
+    el.style.left = p.x + 'px'; el.style.top = p.y + 'px';
+    el.innerHTML = '<div class="sprite">' + unitSVG(g.unk ? 'soldier' : g.ty) + '</div><span class="q">?</span><span class="gl">R' + g.round + '</span>';
+    b.appendChild(el);
+  });
+}
+function trackSpotted() {
+  const now = new Set(units.filter(u => u.pl === 2 && isVisible(u)).map(u => u.id));
+  if (fogActive() && battleStarted) {
+    now.forEach(id => {
+      if (!seenIds.has(id)) {
+        const u = units.find(x => x.id === id);
+        if (u) { log('👁️ Enemy spotted: ' + u.n); toast('👁️ Enemy spotted: ' + u.n); }
+      }
+    });
+  }
+  seenIds = now;
+}
+
+// --- toast / turn flash ----------------------------------------------
+function toast(msg) {
+  const host = document.querySelector('.board-container');
+  if (!host) return;
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  t.style.top = ((document.body.classList.contains('mobile') ? 72 : 10) + 32 * host.querySelectorAll('.toast').length) + 'px';
+  host.appendChild(t);
+  setTimeout(() => t.remove(), 1800);
+}
+function showTurnFlash(line1, line2, enemy) {
+  const host = document.querySelector('.board-container');
+  if (!host) return;
+  const old = document.getElementById('turnFlash');
+  if (old) old.remove();
+  const el = document.createElement('div');
+  el.id = 'turnFlash';
+  if (enemy) el.className = 'enemy';
+  const sp = document.createElement('span');
+  if (line1) { const sm = document.createElement('small'); sm.textContent = line1; sp.appendChild(sm); }
+  const big = document.createElement('b');
+  big.textContent = line2;
+  sp.appendChild(big);
+  el.appendChild(sp);
+  host.appendChild(el);
+  setTimeout(() => { if (el.parentNode) el.remove(); }, 1400);
+}
+function announceTurn() {
+  const owner = cur ? cur.pl : null;
+  if (battleStarted && cur) {
+    if (cur.pl === 1 && (lastTurnOwner !== 1 || pendingRound)) {
+      showTurnFlash(pendingRound ? 'ROUND ' + roundNum : '', 'YOUR TURN', false);
+      autosave();
+      playSound('yourturn'); buzz(25);
+    }
+    pendingRound = false;
+    if (opt('optCam')) {
+      refreshVision();
+      if (cur.pl === 1 || (isVisible(cur) && aiSpeed() !== 'instant')) focusOn(cur.x, cur.y, isMobileLayout() ? Math.max(zoom, 0.9) : undefined);   // phones: never smaller than a tappable size
+    }
+  }
+  lastTurnOwner = owner;
+}
+
+// --- camera -----------------------------------------------------------
+function fitZoom() {
+  const c = document.querySelector('.board-container');
+  return Math.min(c.clientWidth / (COLS * CELL + 40), c.clientHeight / (ROWS * CELL + 40), 1.5);
+}
+function camZoom() { return Math.min(2.2, Math.max(fitZoom() * 1.4, 1.1)); }
+function focusOn(x, y, z) {
+  const c = document.querySelector('.board-container');
+  if (!c || c.clientWidth < 10 || c.clientHeight < 10) return;
+  if (z) zoom = z;
+  const p = px(x, y);
+  panX = c.clientWidth / 2 - p.x * zoom;
+  panY = c.clientHeight / 2 - p.y * zoom;
+  const b = document.getElementById('board');
+  b.classList.add('animate');
+  clearTimeout(focusTimer);
+  focusTimer = setTimeout(() => b.classList.remove('animate'), 500);
+  applyPan();
+}
+
+// --- undo -------------------------------------------------------------
+function recordMove(u) {
+  refreshVision();
+  moveHistory.push({
+    id: u.id, x: u.x, y: u.y, face: u.face, ap: u.ap, slowed: u.slowed || 0, hp: u.hp,
+    res: resources.length, mines: mines.length, nUnits: units.length,
+    seen: units.filter(x => x.pl === 2 && isVisible(x)).map(x => x.id)
+  });
+}
+function lastMoveFor(id) {
+  for (let i = moveHistory.length - 1; i >= 0; i--) if (moveHistory[i].id === id) return moveHistory[i];
+  return null;
+}
+function clearUndo(id) { moveHistory = id === undefined ? [] : moveHistory.filter(h => h.id !== id); }
+function canUndo() { return !!(cur && cur.pl === 1 && !attackMode && !healMode && lastMoveFor(cur.id)); }
+function undoMove() {
+  if (!canUndo()) { log('Nothing to undo'); return; }
+  const e = lastMoveFor(cur.id);
+  if (units.some(u => u.id !== cur.id && u.x === e.x && u.y === e.y)) { log('Cannot undo: that tile is now occupied'); return; }
+  moveHistory.splice(moveHistory.indexOf(e), 1);
+  cur.x = e.x; cur.y = e.y; cur.face = e.face; cur.ap = e.ap; cur.slowed = e.slowed;
+  log(cur.n + ' undoes the move');
+  playSound('move');
+  render(); ui(); updateBar();
+  setBanner(cur.n + ' — AP ' + cur.ap + ' left');
+}
+document.addEventListener('keydown', e => {
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') || e.key.toLowerCase() === 'u') { e.preventDefault(); if (!battleStarted && paintUndo.length) undoPaint(); else undoMove(); }
+  else if (e.key === 'Escape' && cur && (attackMode || healMode)) cancelAttack();
+  else if (e.key.toLowerCase() === 'f') fitBoard(true);
+});
+
+
+// ====================================================================
+// AI that plays under fog: its own vision, memory of last-seen enemies, pathfinding
+// ====================================================================
+let aiVis = null, aiMemory = {};
+const aiFogActive = () => opt('optAIFog') && aiOn;
+function refreshAIVision() { aiVis = aiFogActive() ? computeVision(2) : null; return aiVis; }
+function aiSees(u) { return !aiFogActive() || !!(aiVis && aiVis.has(k(u.x, u.y))); }
+function aiUpdateMemory() {
+  refreshAIVision();
+  Object.keys(aiMemory).forEach(id => { if (!units.some(u => String(u.id) === id) || roundNum - aiMemory[id].round > AI_LEVELS[aiLevel].mem) delete aiMemory[id]; });
+  if (!aiFogActive()) { aiMemory = {}; return; }
+  units.filter(u => u.pl === 1).forEach(u => {
+    if (aiVis.has(k(u.x, u.y))) aiMemory[u.id] = { x: u.x, y: u.y, ty: u.ty, round: roundNum };
+    else if (aiMemory[u.id] && aiVis.has(k(aiMemory[u.id].x, aiMemory[u.id].y))) delete aiMemory[u.id];   // it can see the spot and it's empty
+  });
+}
+function aiKnown() {
+  const out = [];
+  units.filter(u => u.pl === 1).forEach(u => {
+    if (aiSees(u)) out.push({ unit: u, x: u.x, y: u.y, ty: u.ty, live: true });
+    else if (aiMemory[u.id]) out.push({ unit: null, x: aiMemory[u.id].x, y: aiMemory[u.id].y, ty: aiMemory[u.id].ty, live: false });
+  });
+  return out;
+}
+function aiSearchGoal(u) {
+  if (u.goal && dist(u, u.goal) > 1 && roundNum - (u.goalRound || 0) <= 3) return u.goal;
+  const cand = cells.filter(c => !imp(c.x, c.y) && c.x <= Math.floor(COLS * 0.45));
+  const g = cand[Math.floor(Math.random() * cand.length)] || { x: 1, y: Math.floor(ROWS / 2) };
+  u.goal = { x: g.x, y: g.y }; u.goalRound = roundNum;
+  return u.goal;
+}
+function aiMoveStep(goal, mode, threats) {
+  const reach = moveCells(cur, {});
+  if (!reach.size) return false;
+  const field = distField(goal.x, goal.y, cur);
+  const here = field.has(k(cur.x, cur.y)) ? field.get(k(cur.x, cur.y)) : Infinity;
+  const retreatScore = c => { let md = 99; threats.forEach(t => { md = Math.min(md, dist(c, t)); }); return md * 1.5 + coverPercent(c) * 0.08; };
+  const tgtU = mode === 'engage' ? units.find(u => u.pl === 1 && u.x === goal.x && u.y === goal.y) : null;
+  let best = null, bestScore = -Infinity;
+  reach.forEach(c => {
+    if (!field.has(k(c.x, c.y))) return;
+    let score = mode === 'retreat' ? retreatScore(c) : -field.get(k(c.x, c.y)) + coverPercent(c) * 0.06;
+    if (tgtU) score += { front: 0, side: 1.2, rear: 2.4 }[flankKind(c, tgtU)] * (dist(c, tgtU) <= cur.rg ? 1 : 0.3);   // prefer a flanking angle
+    if (shells.some(sh => dist(c, sh) <= sh.r)) score -= 8;   // keep out of marked shelling zones
+    if (resources.some(r => r.x === c.x && r.y === c.y)) score += 4;
+    if (score > bestScore) { bestScore = score; best = c; }
+  });
+  if (!best) return false;
+  if (mode === 'retreat') { if (bestScore <= retreatScore(cur)) return false; }
+  else if (field.get(k(best.x, best.y)) >= here) return false;     // no progress toward the goal
+  cur.face = angleTo(cur, best);
+  cur.x = best.x; cur.y = best.y; cur.ap = Math.max(0, cur.ap - Math.max(1, Math.ceil(best.cost / perAp(cur))));
+  logAI(cur, cur.n + (mode === 'retreat' ? ' retreats to cover' : mode === 'investigate' ? ' investigates' : ' advances'));
+  playSound('move');
+  checkPickup(cur);
+  checkMines(cur);
+  render();
+  if (units.includes(cur)) {
+    if (opt('optCam') && aiSpeed() !== 'instant') { refreshVision(); if (isVisible(cur)) focusOn(cur.x, cur.y); }
+    checkOverwatch(cur);
+  }
+  return true;
+}
+
+// --- terrain-aware movement: 2 steps per AP, entering forest costs 2, water/rock are impassable
+const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+function angleTo(a, b) { return Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI; }
+function perAp(u) { return (u && types[u.ty] && types[u.ty].move) || 2; }
+function stepCost(x, y, u) {
+  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return Infinity;
+  const t = terr[k(x, y)] || 'open', f = fx[t];
+  if (f.i) return Infinity;
+  if (u && types[u.ty] && types[u.ty].vehicle && t === 'forest') return perAp(u) * 2;   // vehicles can force through woods, but it costs 2 AP a tile
+  return f.m;
+}
+function moveCells(u, opts) {
+  opts = opts || {};
+  const per = perAp(u), budget = (types[u.ty] && types[u.ty].vehicle && u.ap >= 2) ? per * 2 : per, best = new Map(), over = new Set(), res = new Map();
+  best.set(k(u.x, u.y), { c: 0, prev: null });
+  const pq = [{ x: u.x, y: u.y, c: 0 }];
+  const hiddenFoe = o => opts.fog && u.pl === 1 && o.pl === 2 && !isVisible(o);
+  while (pq.length) {
+    pq.sort((a, b) => a.c - b.c);
+    const n = pq.shift();
+    if (n.c > best.get(k(n.x, n.y)).c) continue;
+    for (const [dx, dy] of D4) {
+      const x = n.x + dx, y = n.y + dy, sc = stepCost(x, y, u);
+      if (!isFinite(sc)) continue;
+      const c = n.c + sc;
+      if (c > budget) continue;
+      const kk = k(x, y), cb = best.get(kk);
+      if (cb && cb.c <= c) continue;
+      const occ = units.find(o => o.x === x && o.y === y && o.id !== u.id);
+      if (occ && occ.pl !== u.pl && !hiddenFoe(occ)) {
+        if (opts.overrun) { best.set(kk, { c, prev: k(n.x, n.y) }); over.add(kk); }
+        continue;    // enemies block the way (a tank may drive onto one, but not past it)
+      }
+      best.set(kk, { c, prev: k(n.x, n.y) });
+      pq.push({ x, y, c });
+    }
+  }
+  best.forEach((v, kk) => {
+    if (!v.prev) return;
+    const [x, y] = kk.split(',').map(Number);
+    const occ = units.find(o => o.x === x && o.y === y && o.id !== u.id);
+    if (over.has(kk)) res.set(kk, { x, y, cost: v.c, overrun: true });
+    else if (!occ || hiddenFoe(occ)) res.set(kk, { x, y, cost: v.c });
+  });
+  res.paths = best;
+  return res;
+}
+function hiddenOnPath(reach, x, y, allowDest) {
+  let kk = k(x, y), first = true;
+  while (kk) {
+    const node = reach.paths.get(kk);
+    if (!node) break;
+    const [cx, cy] = kk.split(',').map(Number);
+    const h = units.find(o => o.x === cx && o.y === cy && o.pl === 2 && !isVisible(o));
+    if (h && !(first && allowDest)) return h;
+    first = false; kk = node.prev;
+  }
+  return null;
+}
+function distField(gx, gy, u) {
+  const best = new Map([[k(gx, gy), 0]]), pq = [{ x: gx, y: gy, c: 0 }];
+  while (pq.length) {
+    pq.sort((a, b) => a.c - b.c);
+    const n = pq.shift();
+    if (n.c > best.get(k(n.x, n.y))) continue;
+    const enter = stepCost(n.x, n.y, u);
+    for (const [dx, dy] of D4) {
+      const x = n.x + dx, y = n.y + dy;
+      if (!isFinite(stepCost(x, y, u))) continue;
+      const nc = n.c + (isFinite(enter) ? enter : 1), kk = k(x, y);
+      if (best.has(kk) && best.get(kk) <= nc) continue;
+      best.set(kk, nc); pq.push({ x, y, c: nc });
+    }
+  }
+  return best;
+}
+
+
+// ====================================================================
+// Odds preview, cover erosion, ramming, battlefield events, AI difficulty
+// ====================================================================
+const COVER_WEAR = 5;   // cover points chewed off a tile each time someone shoots at a unit standing on it
+let coverWear = {}, shells = [];
+let radialFor = null, radialTouch = 0, pendingRadial = null, hoverUnitId = null;
+const AI_LEVELS = {
+  easy:   { pts: 70,  vis: -1, mem: 3, blunder: 0.3, hesitate: 0.25 },
+  normal: { pts: 100, vis: 0,  mem: 5, blunder: 0,   hesitate: 0 },
+  hard:   { pts: 130, vis: 1,  mem: 8, blunder: 0,   hesitate: 0 }
+};
+let aiLevel = 'normal';
+function setAiLevel(name) {
+  if (!AI_LEVELS[name] || aiOn) return;
+  aiLevel = name;
+  document.querySelectorAll('.lv').forEach(el => el.classList.toggle('active', el.dataset.l === name));
+}
+
+function attackCost(u, aimed) { const t = types[u.ty] || {}; return (aimed ? 3 : 2) + (t.atkExtra || 0); }
+function dmgFor(a, t, gren) {
+  let d = gren ? 2 : a.ty === 'arty' ? 3 : a.ty === 'flamer' ? 2 : 1;
+  if (types[a.ty] && types[a.ty].antiArmor && types[t.ty] && types[t.ty].vehicle) d += 1;   // bazookas and sticky bombs
+  return d;
+}
+// Exact chance to hit, using the same rule doAttack uses: total >= need, or any die shows a 6
+function attackOdds(a, t, aimed, gren) {
+  const m = (a.at || '1d6').match(/(\d+)d(\d+)/);
+  const n = m ? +m[1] : 1, sides = m ? +m[2] : 6, extra = a.aim ? 1 : 0;
+  const fk = flankKind(a, t);
+  const cover = coverPercent(t);
+  const need = Math.max(1, t.df + Math.floor((fk === 'rear' ? Math.floor(cover / 2) : cover) / 5) + (t.st === 'defend' ? 2 : 0) - FLANK_BONUS[fk]);
+  let hit = 0, tot = 0;
+  const rec = (i, sum, six) => {
+    if (i === n + extra) { tot++; if (sum >= need || six) hit++; return; }
+    for (let r = 1; r <= sides; r++) {
+      const v = (aimed && i < n) ? Math.min(sides, r + 1) : r;
+      rec(i + 1, sum + v, six || v >= 6);
+    }
+  };
+  rec(0, 0, false);
+  const dmg = dmgFor(a, t, gren);
+  return { chance: hit / tot, need, dmg, cover, hitsToKill: Math.ceil(t.hp / dmg), crit: gren ? 0 : Math.min(0.95, 0.3 + (a.critBonus || 0) + (fk === 'rear' ? 0.1 : 0)), flank: fk, dice: (a.aim ? (n + 1) : n) + 'd' + sides };
+}
+function previewHTML(t) {
+  if (!cur || cur.pl !== 1 || t.pl !== 2 || attackMode === undefined) return '';
+  const sep = '<div class="tp-sep"></div>';
+  const d = dist(cur, t);
+  const rows = [];
+  const cls = c => c >= 0.6 ? 'good' : c >= 0.3 ? 'mid' : 'bad';
+  const add = (label, aimed, gren, cost) => {
+    const o = attackOdds(cur, t, aimed, gren);
+    rows.push(`<div class="tp-row ${cur.ap < cost ? 'dim' : ''}"><span>${label} <small>${cost} AP</small></span><b class="${cls(o.chance)}">${Math.round(o.chance * 100)}%</b><span>${o.dmg} dmg</span></div>`);
+    return o;
+  };
+  let note = '';
+  if (d <= cur.rg && hasLOS(cur, t)) {
+    const o = add('⚔️ Attack', false, false, attackCost(cur, false));
+    add('🎯 Aimed', true, false, attackCost(cur, true));
+    if (cur.gr > 0 && d <= 2) add('💣 Grenade', false, true, 2);
+    note = `${o.flank === 'rear' ? '↺ REAR attack: −2 to beat, cover halved · ' : o.flank === 'side' ? '↺ Flank: −1 to beat · ' : ''}Needs ${o.need}+ on ${o.dice} (or any 6) · cover ${o.cover}% · ${o.hitsToKill} hit${o.hitsToKill > 1 ? 's' : ''} to kill · ${Math.round(o.crit * 100)}% crit`;
+  } else if (d > cur.rg) rows.push(`<div class="tp-bad">Out of range (${d}/${cur.rg})</div>`);
+  else rows.push('<div class="tp-bad">No line of sight</div>');
+  if (ramPrep(cur, t)) rows.push('<div class="tp-row"><span>🚜 Ram <small>2 AP</small></span><b class="mid">2 dmg</b><span>may dodge</span></div>');
+  return sep + rows.join('') + (note ? `<div class="tp-note">${note}</div>` : '');
+}
+function wearCover(t) {
+  const kk = k(t.x, t.y);
+  coverWear[kk] = Math.min(60, (coverWear[kk] || 0) + COVER_WEAR);
+  renderWear();
+}
+function renderWear() {
+  cells.forEach(c => { const w = coverWear[k(c.x, c.y)] || 0; c.el.classList.toggle('worn', w >= 10 && w < 25); c.el.classList.toggle('worn2', w >= 25); });
+}
+
+// --- tanks: a ram instead of an instant kill -----------------------------
+function canRamNow(u) { return !!(u && types[u.ty] && types[u.ty].overrun && u.ap >= 2 && !u.rammed); }
+function ramPrep(a, v) {
+  if (!canRamNow(a) || !a || v.pl === a.pl) return null;
+  const reach = moveCells(a, { overrun: true, fog: true });
+  const node = reach.get(k(v.x, v.y));
+  if (!node || !node.overrun || node.cost > perAp(a)) return null;   // a ram only reaches 2 tiles
+  const prev = reach.paths.get(k(v.x, v.y)).prev;
+  const [qx, qy] = prev.split(',').map(Number);
+  if ((qx !== a.x || qy !== a.y) && units.some(o => o.id !== a.id && o.x === qx && o.y === qy)) return null;   // can't stop on a friend
+  return { x: qx, y: qy };
+}
+function doRam(a, v, prep) {
+  clearUndo(a.id);
+  a.ap -= 2; a.rammed = true;
+  a.face = angleTo(a, v);
+  a.x = prep.x; a.y = prep.y;
+  const vehicle = types[v.ty] && types[v.ty].vehicle;
+  const dodged = !vehicle && (1 + Math.floor(Math.random() * 6) + Math.floor(coverPercent(v) / 10)) >= 5;
+  playSound('ram');
+  if (dodged) {
+    log(v.n + ' dives clear of the ' + a.n + '!');
+  } else {
+    v.hp -= 2;
+    log(a.n + ' RAMS ' + v.n + ' for 2 damage!');
+    playSound('hit');
+    if (vehicle) { a.hp -= 1; log(a.n + ' takes 1 damage from the collision'); }
+  }
+  if (v.hp <= 0) {
+    units = units.filter(x => x.id !== v.id);
+    log(v.n + ' CRUSHED!');
+    playSound('destroy');
+    if (a.pl === 1) { kills++; pm += 8; updateUnlocks(); log('+8 pts from ram'); }
+    a.x = v.x; a.y = v.y;                                    // the tank rolls on into the gap
+  }
+  if (a.hp <= 0) { units = units.filter(x => x.id !== a.id); log(a.n + ' destroyed'); playSound('destroy'); }
+  if (checkWin()) return;
+  if (!units.includes(a)) { render(); ui(); next(); return; }
+  if (!afterPlayerMove(a)) return;
+  render(); ui(); showRadial();
+  setBanner(a.n + ' — AP ' + a.ap + ' left');
+}
+
+// --- stalemate breakers: telegraphed shelling, supply drops, comeback reinforcements ----
+const shellRisk = c => shells.some(sh => dist(c, sh) <= sh.r) ? 1 : 0;
+function renderShells() {
+  document.querySelectorAll('.shellzone').forEach(e => e.remove());
+  const b = document.getElementById('board');
+  shells.forEach(sh => cells.forEach(c => {
+    if (dist(c, sh) > sh.r) return;
+    const p = px(c.x, c.y);
+    const el = document.createElement('div');
+    el.className = 'shellzone';
+    el.style.left = (p.x - CELL / 2) + 'px'; el.style.top = (p.y - CELL / 2) + 'px';
+    if (c.x === sh.x && c.y === sh.y) { el.textContent = '💥'; el.title = 'Shelling lands at the start of the next round'; }
+    b.appendChild(el);
+  }));
+}
+function landShell(sh) {
+  log('💥 Shells land near (' + (sh.x + 1) + ',' + (sh.y + 1) + ')!');
+  toast('💥 Shells landing!');
+  playSound('shellboom');
+  cells.forEach(c => { if (dist(c, sh) <= sh.r) { const kk = k(c.x, c.y); coverWear[kk] = Math.min(60, (coverWear[kk] || 0) + 20); } });
+  units.filter(u => dist(u, sh) <= sh.r).forEach(u => {
+    u.hp -= 1;
+    log(u.n + ' is caught in the barrage (−1 HP)');
+    if (u.hp <= 0) { units = units.filter(x => x.id !== u.id); log(u.n + ' destroyed'); playSound('destroy'); }
+  });
+}
+function announceShell(radius) {
+  const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  refreshVision();
+  const pool = units.filter(u => u.pl === 1 || isVisible(u));    // never reveals unseen enemies
+  let x, y;
+  if (pool.length && Math.random() < 0.6) { const t = pool[ri(0, pool.length - 1)]; x = t.x + ri(-1, 1); y = t.y + ri(-1, 1); }
+  else { x = ri(1, COLS - 2); y = ri(0, ROWS - 1); }
+  x = Math.max(0, Math.min(COLS - 1, x)); y = Math.max(0, Math.min(ROWS - 1, y));
+  shells.push({ x, y, r: radius, due: roundNum + 1 });
+  log('⚠️ Shelling incoming near (' + (x + 1) + ',' + (y + 1) + ') — it lands next round. Get clear!');
+  toast('⚠️ Shelling incoming — red zone lands next round');
+  playSound('siren');
+}
+function supplyDrop() {
+  let n = 0;
+  for (let tries = 0; tries < 60 && n < 2; tries++) {
+    const x = 2 + Math.floor(Math.random() * (COLS - 4)), y = Math.floor(Math.random() * ROWS);
+    if (imp(x, y) || units.some(u => u.x === x && u.y === y) || resources.some(r => r.x === x && r.y === y)) continue;
+    resources.push({ x, y, type: ['ammo', 'medkit', 'scrap'][Math.floor(Math.random() * 3)] }); n++;
+  }
+  if (n) { log('📦 Supply drop: ' + n + ' crates landed on the battlefield'); toast('📦 Supply drop!'); playSound('crate'); }
+}
+// Called at the start of every new round (before AP is refilled). Returns false if the game just ended.
+function runRoundEvents() {
+  if (!opt('optEvents')) return true;
+  const due = shells.filter(sh => sh.due <= roundNum);
+  shells = shells.filter(sh => sh.due > roundNum);
+  due.forEach(landShell);
+  if (due.length && checkWin()) { render(); return false; }
+  const r = roundNum;
+  if (r === 8) log('⚠️ The battlefield is getting hotter: shelling every round from now on');
+  if (r === 14) log('☠️ Sudden death: heavy shelling every round');
+  const n = r >= 14 ? 2 : r >= 8 ? 1 : (r >= 3 && Math.random() < 0.4 ? 1 : 0);
+  for (let i = 0; i < n; i++) announceShell(r >= 14 ? 2 : 1);
+  if (r >= 3 && Math.random() < 0.25) supplyDrop();
+  const n1 = units.filter(u => u.pl === 1).length, n2 = units.filter(u => u.pl === 2).length;
+  if (r >= 3 && Math.abs(n1 - n2) >= 2 && Math.random() < 0.6) {      // comeback mechanic for whoever is behind
+    if (n1 < n2) { pm += 10; log('📡 Reinforcement budget: +10 pts for you'); toast('📡 +10 reinforcement pts'); }
+    else { am += 10; buy('soldier', 2); log(fogActive() ? '📡 Enemy radio traffic: reinforcements arriving' : '📡 AI reinforcements arrive'); }
+  }
+  return true;
+}
+
+// --- unspent AP warning ------------------------------------------------
+function skipUnit() {
+  if (!cur) { log('No active unit'); return; }
+  if (cur.pl === 1 && cur.ap >= 2 && opt('optApWarn')) {
+    showConfirm('End this unit’s turn?', cur.n + ' still has ' + cur.ap + ' AP unspent.', 'End turn', () => skip());
+    return;
+  }
+  skip();
+}
+
+
+// ====================================================================
+// Map creator, map export/import, game save/load
+// ====================================================================
+let creatorMode = false, painting = false, paintUndo = [];
+const TILE_TYPES = ['open', 'forest', 'bush', 'hill', 'water', 'rock'];
+const TILE_VARIANTS = ['pine', 'oak', 'mixed', 'big', 'med', 'small', 'mountain'];
+const clampN = (v, lo, hi, d) => { v = Number(v); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
+const clampI = (v, lo, hi, d) => Math.round(clampN(v, lo, hi, d));
+const slugify = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'map';
+
+// ---- painting ----
+function applyPaint(x, y) {
+  if (battleStarted || !paintMode) return;
+  if (paintMode === 'bridge' || paintMode === 'ford') setCellTerrain(x, y, 'open', undefined, paintMode);   // crossings are walkable ground drawn over water
+  else setCellTerrain(x, y, paintMode, randomVariant(paintMode));
+  redrawTerrainAround(x, y);
+}
+function redrawAllTerrain() { cells.forEach(c => { c.el.className = 'cell ' + (terr[k(c.x, c.y)] || 'open'); applyTerrainVisual(c.el, terr[k(c.x, c.y)] || 'open'); }); }
+function snapshotTerrain() { return JSON.stringify({ terr, tvar, deco }); }
+function restoreTerrain(str) {
+  const d = JSON.parse(str);
+  [[terr, d.terr], [tvar, d.tvar], [deco, d.deco]].forEach(([obj, src]) => { Object.keys(obj).forEach(kk => delete obj[kk]); Object.assign(obj, src); });
+  redrawAllTerrain();
+}
+function pushPaintUndo() { paintUndo.push(snapshotTerrain()); if (paintUndo.length > 40) paintUndo.shift(); }
+function undoPaint() {
+  if (battleStarted) return;
+  if (!paintUndo.length) { toast('Nothing to undo'); return; }
+  restoreTerrain(paintUndo.pop());
+  render();
+}
+function blankTerrain() {
+  if (battleStarted) return;
+  pushPaintUndo();
+  Object.keys(terr).forEach(kk => { terr[kk] = 'open'; });
+  Object.keys(tvar).forEach(kk => delete tvar[kk]);
+  Object.keys(deco).forEach(kk => delete deco[kk]);
+  redrawAllTerrain();
+  render();
+}
+
+// ---- map creator mode ----
+function renderZones() {
+  document.querySelectorAll('.zone').forEach(e => e.remove());
+  if (!creatorMode) return;
+  const b = document.getElementById('board'), m = mapMargin();
+  [[0, 'blue', 'Your start zone'], [COLS - m, 'red', 'Enemy start zone']].forEach(([x0, col, label]) => {
+    const p = px(x0, 0);
+    const el = document.createElement('div');
+    el.className = 'zone ' + col;
+    el.style.cssText = `left:${p.x - CELL / 2}px;top:${p.y - CELL / 2}px;width:${m * CELL}px;height:${ROWS * CELL}px;`;
+    el.innerHTML = '<span>' + label + '</span>';
+    b.appendChild(el);
+  });
+}
+function enterCreator() {
+  if (battleStarted || aiOn) return;
+  closeModal();
+  creatorMode = true; document.body.classList.add('creator');
+  blankTerrain();
+  document.getElementById('creatorBar').style.display = 'flex';
+  const tt = document.getElementById('terrainTools'); if (tt) { tt.style.display = ''; tt.open = true; }
+  paint('forest');
+  render();
+  setTimeout(() => fitBoard(true), 0);
+}
+function leaveCreator(start) {
+  creatorMode = false; document.body.classList.remove('creator');
+  paint(null);
+  document.getElementById('creatorBar').style.display = 'none';
+  render();
+  setTimeout(() => fitBoard(true), 0);
+  if (start) startAI(); else showStartScreen();
+}
+function testMap() {
+  if (!terrainPlayable()) {
+    showConfirm('The armies can’t reach each other', 'Water or rock completely blocks the way between the two start zones. Test the map anyway?', 'Test anyway', () => leaveCreator(true));
+    return;
+  }
+  leaveCreator(true);
+}
+
+// ---- map files ----
+function tilesData() { return cells.map(c => { const kk = k(c.x, c.y); return [terr[kk] || 'open', tvar[kk] || null, deco[kk] || null]; }); }
+function mapToData() {
+  const nm = document.getElementById('mapName');
+  return { format: 'toy-soldiers-map', version: 1, name: (nm && nm.value.trim().slice(0, 40)) || 'My map', cols: COLS, rows: ROWS, tiles: tilesData() };
+}
+function validateTiles(d) {
+  if (!Array.isArray(d.tiles) || d.tiles.length !== d.cols * d.rows) return 'The map data is incomplete';
+  for (const t of d.tiles) {
+    if (!Array.isArray(t) || !TILE_TYPES.includes(t[0])) return 'The map contains an unknown tile';
+    if (t[1] != null && !TILE_VARIANTS.includes(t[1])) return 'The map contains an unknown tile variant';
+    if (t[2] != null && !(t[2] === 'bridge' || t[2] === 'ford')) return 'The map contains an unknown crossing';
+    if (t[2] && t[0] !== 'open') return 'A crossing sits on a non-walkable tile';
+  }
+  return null;
+}
+function validateSize(d) {
+  if (!Number.isInteger(d.cols) || !Number.isInteger(d.rows) || d.cols < 6 || d.cols > 40 || d.rows < 5 || d.rows > 30) return 'Map size must be between 6×5 and 40×30';
+  return null;
+}
+function validateMapData(d) {
+  if (!d || d.format !== 'toy-soldiers-map') return 'That file is not a Toy Soldiers map';
+  if (d.version !== 1) return 'Unsupported map version';
+  return validateSize(d) || validateTiles(d);
+}
+function resetWorld(c, r) {
+  COLS = c; ROWS = r;
+  units = []; cur = null; queue = []; resources = []; mines = []; ghosts = {}; aiMemory = {}; seenIds = new Set(); moveHistory = []; coverWear = {}; shells = [];
+  buildBoard();
+}
+function fillTiles(tiles) {
+  Object.keys(tvar).forEach(kk => delete tvar[kk]);
+  Object.keys(deco).forEach(kk => delete deco[kk]);
+  cells.forEach((c, i) => { const t = tiles[i], kk = k(c.x, c.y); terr[kk] = t[0]; if (t[1]) tvar[kk] = t[1]; if (t[2]) deco[kk] = t[2]; });
+  redrawAllTerrain();
+}
+function sizeNameFor(c, r) { return Object.keys(MAP_SIZES).find(n => MAP_SIZES[n].c === c && MAP_SIZES[n].r === r) || 'custom'; }
+function applyMapData(d) {
+  const err = validateMapData(d);
+  if (err) { toast('⚠️ ' + err); return false; }
+  if (battleStarted || aiOn) { toast('Import maps from the start screen or the map creator'); return false; }
+  resetWorld(d.cols, d.rows);
+  mapSize = sizeNameFor(d.cols, d.rows);
+  fillTiles(d.tiles);
+  paintUndo = [];
+  const nm = document.getElementById('mapName'); if (nm && d.name) nm.value = String(d.name).slice(0, 40);
+  document.querySelectorAll('.sz:not(.lv):not(.md)').forEach(el => el.classList.toggle('active', el.dataset.s === mapSize));
+  render();
+  setTimeout(() => fitBoard(true), 0);
+  toast('🗺️ Map loaded' + (d.name ? ': ' + String(d.name).slice(0, 40) : ''));
+  return true;
+}
+function downloadJSON(filename, obj) {
+  const blob = new Blob([JSON.stringify(obj)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function exportMap() { const d = mapToData(); downloadJSON('toy-soldiers-map-' + slugify(d.name) + '.json', d); toast('⬇ Map exported'); }
+function importAny() { const f = document.getElementById('importFile'); f.value = ''; f.click(); }
+document.getElementById('importFile').addEventListener('change', ev => {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  if (file.size > 2000000) { toast('⚠️ That file is too large'); return; }
+  const rd = new FileReader();
+  rd.onload = () => {
+    let d;
+    try { d = JSON.parse(rd.result); } catch (e) { toast('⚠️ That file is not valid JSON'); return; }
+    if (d && d.format === 'toy-soldiers-map') applyMapData(d);
+    else if (d && d.format === 'toy-soldiers-save') loadData(d);
+    else toast('⚠️ Not a Toy Soldiers map or save file');
+  };
+  rd.readAsText(file);
+});
+
+// ---- game saves ----
+const SAVE_OPTS = ['optFog', 'optGhost', 'optAIFog', 'optCam', 'optConfirm', 'optApWarn', 'optEvents'];
+function makeSave() {
+  const settings = { optSpeed: aiSpeed() };
+  SAVE_OPTS.forEach(id => { settings[id] = opt(id); });
+  return {
+    format: 'toy-soldiers-save', version: 1, savedAt: Date.now(),
+    cols: COLS, rows: ROWS, aiLevel, tiles: tilesData(),
+    units: JSON.parse(JSON.stringify(units)),
+    queue: queue.filter(u => units.includes(u)).map(u => u.id), curId: cur ? cur.id : null,
+    mines: JSON.parse(JSON.stringify(mines)), resources: JSON.parse(JSON.stringify(resources)), shells: JSON.parse(JSON.stringify(shells)),
+    coverWear: Object.assign({}, coverWear), ghosts: JSON.parse(JSON.stringify(ghosts)), aiMemory: JSON.parse(JSON.stringify(aiMemory)), seen: [...seenIds],
+    pm, am, kills, roundNum, uid, battleStarted, aiOn, playerDeploysFirst, settings,
+    objective, objState: JSON.parse(JSON.stringify(objState))
+  };
+}
+function validateSave(d) {
+  if (!d || d.format !== 'toy-soldiers-save') return 'That file is not a Toy Soldiers save';
+  if (d.version !== 1) return 'Unsupported save version';
+  const e = validateSize(d) || validateTiles(d);
+  if (e) return e;
+  if (!Array.isArray(d.units) || d.units.length > 80) return 'The save has a bad unit list';
+  for (const u of d.units) if (!u || typeof u !== 'object' || !types[u.ty]) return 'The save contains an unknown unit type';
+  return null;
+}
+function cleanUnit(o) {      // never trust a file: rebuild every unit from the unit table
+  const t = types[o.ty];
+  const u = {
+    id: clampI(o.id, 0, 1e9, 0), ty: o.ty, pl: o.pl === 2 ? 2 : 1, n: t.n, i: t.i,
+    x: clampI(o.x, 0, COLS - 1, 0), y: clampI(o.y, 0, ROWS - 1, 0),
+    mv: t.mv, rg: t.rg, at: t.at, df: t.df, sp: !!t.sp,
+    hp: clampI(o.hp, 1, t.hp, t.hp), mx: t.hp, gr: clampI(o.gr, 0, 9, t.gr || 0),
+    ap: clampI(o.ap, 0, t.ap, 0), maxAp: t.ap,
+    st: (o.st === 'defend' || o.st === 'aim' || o.st === 'overwatch') ? o.st : null,
+    aim: o.aim ? 1 : 0, critBonus: clampN(o.critBonus, 0, 1, 0), mines: clampI(o.mines, 0, 9, t.mines || 0)
+  };
+  if (Number.isFinite(o.face)) u.face = clampN(o.face, -720, 720, 0);
+  if (o.fullHealCd) u.fullHealCd = clampI(o.fullHealCd, 0, 999, 0);
+  if (o.fieldCd) u.fieldCd = clampI(o.fieldCd, 0, 999, 0);
+  if (o.rammed) u.rammed = true;
+  if (o.slowed) u.slowed = clampI(o.slowed, 0, 5, 0);
+  if (o.aiMined) u.aiMined = true;
+  if (o.goal && Number.isFinite(o.goal.x) && Number.isFinite(o.goal.y)) { u.goal = { x: clampI(o.goal.x, 0, COLS - 1, 0), y: clampI(o.goal.y, 0, ROWS - 1, 0) }; u.goalRound = clampI(o.goalRound, 0, 9999, 0); }
+  return u;
+}
+function applySave(d) {
+  const err = validateSave(d);
+  if (err) { toast('⚠️ ' + err); return false; }
+  creatorMode = false; document.body.classList.remove('creator'); paintMode = null; paintUndo = [];
+  document.getElementById('creatorBar').style.display = 'none';
+  resetWorld(d.cols, d.rows);
+  mapSize = sizeNameFor(d.cols, d.rows);
+  fillTiles(d.tiles);
+  const S = d.settings || {};
+  SAVE_OPTS.forEach(id => { const el = document.getElementById(id); if (el && typeof S[id] === 'boolean') el.checked = S[id]; });
+  const sp = document.getElementById('optSpeed'); if (sp && ['normal', 'fast', 'instant'].includes(S.optSpeed)) sp.value = S.optSpeed;
+  aiLevel = AI_LEVELS[d.aiLevel] ? d.aiLevel : 'normal';
+  const seenId = new Set();
+  units = d.units.map(cleanUnit).filter(u => !seenId.has(u.id) && seenId.add(u.id));
+  queue = (Array.isArray(d.queue) ? d.queue : []).map(id => units.find(u => u.id === id)).filter(Boolean);
+  cur = d.curId == null ? null : (units.find(u => u.id === d.curId) || null);
+  const inB = o => o && Number.isFinite(o.x) && Number.isFinite(o.y) && o.x >= 0 && o.y >= 0 && o.x < COLS && o.y < ROWS;
+  mines = (d.mines || []).filter(inB).map(m => ({ x: m.x | 0, y: m.y | 0, pl: m.pl === 2 ? 2 : 1 }));
+  resources = (d.resources || []).filter(r => inB(r) && ['ammo', 'medkit', 'scrap'].includes(r.type)).map(r => ({ x: r.x | 0, y: r.y | 0, type: r.type }));
+  shells = (d.shells || []).filter(inB).map(sh => ({ x: sh.x | 0, y: sh.y | 0, r: clampI(sh.r, 1, 3, 1), due: clampI(sh.due, 0, 9999, 0) }));
+  coverWear = {};
+  Object.keys(d.coverWear || {}).forEach(kk => { if (/^\d+,\d+$/.test(kk)) coverWear[kk] = clampN(d.coverWear[kk], 0, 60, 0); });
+  ghosts = {};
+  Object.keys(d.ghosts || {}).forEach(id => { const g = d.ghosts[id]; if (inB(g) && /^\d+$/.test(id)) ghosts[id] = { x: g.x | 0, y: g.y | 0, ty: types[g.ty] ? g.ty : 'soldier', round: clampI(g.round, 0, 9999, 0), unk: !!g.unk }; });
+  aiMemory = {};
+  Object.keys(d.aiMemory || {}).forEach(id => { const g = d.aiMemory[id]; if (inB(g) && /^\d+$/.test(id)) aiMemory[id] = { x: g.x | 0, y: g.y | 0, ty: types[g.ty] ? g.ty : 'soldier', round: clampI(g.round, 0, 9999, 0) }; });
+  seenIds = new Set((Array.isArray(d.seen) ? d.seen : []).filter(Number.isInteger));
+  pm = clampI(d.pm, 0, 99999, 0); am = clampI(d.am, 0, 99999, 0); kills = clampI(d.kills, 0, 9999, 0); roundNum = clampI(d.roundNum, 1, 9999, 1);
+  uid = Math.max(clampI(d.uid, 0, 1e9, 0), ...units.map(u => u.id + 1), 0);
+  battleStarted = !!d.battleStarted; aiOn = !!d.aiOn; playerDeploysFirst = !!d.playerDeploysFirst;
+  objective = OBJECTIVES[d.objective] ? d.objective : 'elim'; objState = sanitizeObjective(d.objState); gameOver = false;
+  moveHistory = []; lastTurnOwner = null; pendingRound = false; attackMode = false; healMode = false;
+  hideHoverRadial();
+  closeModal();
+  const ov = document.getElementById('winOverlay'); if (ov) ov.style.display = 'none';
+  if (battleStarted) {
+    const tt = document.getElementById('terrainTools'); if (tt) tt.style.display = 'none';
+    const sg = document.getElementById('setupGuide'); if (sg) sg.style.display = 'none';
+    const sh = document.getElementById('shopBox'); if (sh) sh.open = false;
+  }
+  document.getElementById('cancelBtn').style.display = 'none';
+  render(); ui(); updateBar(); updateUnitList();
+  setTimeout(() => { fitBoard(true); if (cur && cur.pl === 1) setTimeout(() => focusOn(cur.x, cur.y), 600); }, 0);
+  log('📂 Game loaded — round ' + roundNum);
+  toast('📂 Game loaded');
+  if (battleStarted) {
+    if (!cur || cur.pl === 2) next();
+    else { updateBar(); setBanner(cur.n + ' — your turn (AP ' + cur.ap + ')'); }
+  } else setBanner(playerDeploysFirst ? 'You deploy FIRST — buy units, then press Start Battle' : 'AI deployed — buy units, then press Start Battle');
+  return true;
+}
+function closeModal() { const ov = document.getElementById('setupPopup'); if (ov) ov.style.display = 'none'; }
+function loadData(d) {
+  const err = validateSave(d);
+  if (err) { toast('⚠️ ' + err); return; }
+  if (!aiOn && !battleStarted) { applySave(d); return; }
+  // a game is running (timers, AI turns in flight): reload the page for a perfectly clean slate, then restore
+  try { sessionStorage.setItem('ts_pending_load', JSON.stringify(d)); } catch (e) { toast('⚠️ Could not load (storage blocked)'); return; }
+  location.reload();
+}
+function bootGame() {
+  let pending = null;
+  try { pending = sessionStorage.getItem('ts_pending_load'); sessionStorage.removeItem('ts_pending_load'); } catch (e) { /* storage blocked */ }
+  if (pending) {
+    try { if (applySave(JSON.parse(pending))) return; } catch (e) { /* fall through to the menu */ }
+  }
+  showStartScreen();
+}
+
+// ---- save slots ----
+const slotKey = sl => 'ts_save_' + sl;
+function readSlot(sl) { try { const t = localStorage.getItem(slotKey(sl)); return t ? JSON.parse(t) : null; } catch (e) { return null; } }
+function writeSlot(sl, d) { try { localStorage.setItem(slotKey(sl), JSON.stringify(d)); return true; } catch (e) { return false; } }
+function canSaveNow() { return aiOn && (!cur || cur.pl === 1); }
+function autosave() { if (aiOn && battleStarted && canSaveNow()) writeSlot('auto', makeSave()); }
+function saveToSlot(sl) {
+  if (!canSaveNow()) { toast(aiOn ? '⏳ Wait for your turn to save' : 'Start a game first'); return; }
+  if (writeSlot(sl, makeSave())) { toast('💾 Saved to slot ' + sl); closeModal(); }
+  else toast('⚠️ Could not save (storage blocked) — use Export save instead');
+}
+function loadFromSlot(sl) { const d = readSlot(sl); if (!d) { toast('That slot is empty'); return; } closeModal(); loadData(d); }
+function deleteSlot(sl) { try { localStorage.removeItem(slotKey(sl)); } catch (e) { /* ignore */ } showLoadDialog(); }
+function exportSave() {
+  if (!canSaveNow()) { toast(aiOn ? '⏳ Wait for your turn to export' : 'Start a game first'); return; }
+  downloadJSON('toy-soldiers-save-round-' + roundNum + '.json', makeSave());
+  toast('⬇ Save exported');
+}
+function slotRow(sl, mode) {
+  const d = readSlot(sl);
+  const label = sl === 'auto' ? '⏱ Autosave' : 'Slot ' + sl;
+  let info = '<small>empty</small>', ok = false;
+  if (d && validateSave(d) === null) {
+    ok = true;
+    const you = d.units.filter(u => u.pl === 1).length, ai = d.units.filter(u => u.pl === 2).length;
+    info = '<small>Round ' + clampI(d.roundNum, 1, 9999, 1) + ' · ' + d.cols + '×' + d.rows + ' · ' + you + ' v ' + ai + ' units<br>' + new Date(clampN(d.savedAt, 0, 8.64e15, 0)).toLocaleString() + '</small>';
+  }
+  let btns = '';
+  if (mode === 'save') btns = '<button onclick="saveToSlot(\'' + sl + '\')">' + (ok ? 'Overwrite' : 'Save here') + '</button>';
+  else btns = (ok ? '<button onclick="loadFromSlot(\'' + sl + '\')">Load</button>' : '') + (ok && sl !== 'auto' ? '<button onclick="deleteSlot(\'' + sl + '\')">🗑</button>' : '');
+  return '<div class="slot-row"><div><b>' + label + '</b>' + info + '</div><div class="btns">' + btns + '</div></div>';
+}
+function showSaveDialog() {
+  if (!canSaveNow()) { toast(aiOn ? '⏳ Wait for your turn to save' : 'Start a game first'); return; }
+  showModal('💾 Save game', ['1', '2', '3'].map(sl => slotRow(sl, 'save')).join(''), [{ label: 'Close' }]);
+}
+function showLoadDialog() {
+  showModal('📂 Load game', ['auto', '1', '2', '3'].map(sl => slotRow(sl, 'load')).join(''),
+    [{ label: '⬆ Import file…', fn: importAny }, { label: 'Close', fn: () => { if (!aiOn && !battleStarted) showStartScreen(); } }]);
+}
+
+
+// ====================================================================
+// Flanking, objectives (hill / flag), sound routing
+// ====================================================================
+const FLANK_BONUS = { front: 0, side: 1, rear: 2 };
+function unitFace(u) { return u.face !== undefined ? u.face : (u.pl === 1 ? 0 : 180); }
+function flankKind(from, t) {      // where is the attacker, relative to where the target is facing?
+  if (from.x === t.x && from.y === t.y) return 'front';
+  const ang = Math.atan2(from.y - t.y, from.x - t.x) * 180 / Math.PI;
+  let d = Math.abs(ang - unitFace(t)) % 360;
+  if (d > 180) d = 360 - d;
+  return d <= 60 ? 'front' : d <= 120 ? 'side' : 'rear';
+}
+function showFacingWedge(u) {
+  hideFacingWedge();
+  const R = 76, f = unitFace(u), p = px(u.x, u.y);
+  const pt = a => [R * Math.cos(a * Math.PI / 180), R * Math.sin(a * Math.PI / 180)];
+  const wedge = (a0, a1, fill) => { const [x0, y0] = pt(a0), [x1, y1] = pt(a1); return `<path d="M0 0 L${x0.toFixed(1)} ${y0.toFixed(1)} A${R} ${R} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)} Z" fill="${fill}"/>`; };
+  const el = document.createElement('div');
+  el.className = 'wedge';
+  el.style.cssText = `left:${p.x - R}px;top:${p.y - R}px;width:${2 * R}px;height:${2 * R}px;`;
+  el.innerHTML = `<svg width="${2 * R}" height="${2 * R}" viewBox="${-R} ${-R} ${2 * R} ${2 * R}">` +
+    wedge(f - 60, f + 60, 'rgba(255,255,255,.10)') + wedge(f + 60, f + 120, 'rgba(255,209,102,.26)') +
+    wedge(f - 120, f - 60, 'rgba(255,209,102,.26)') + wedge(f + 120, f + 240, 'rgba(255,100,80,.30)') + '</svg>';
+  document.getElementById('board').appendChild(el);
+}
+function hideFacingWedge() { document.querySelectorAll('.wedge').forEach(e => e.remove()); }
+
+function attackSound(a, gren) {
+  if (gren) return 'grenade';
+  return { sniper: 'sniper', flamer: 'flame', tank: 'tankshot', mg: 'mgburst', arty: 'artyshot', heavy: 'bazooka' }[a.ty] || 'shot';
+}
+
+// ---- objectives ----
+const OBJECTIVES = {
+  elim: { short: 'Elimination', title: '⚔️ Elimination', desc: 'Destroy every enemy unit.' },
+  hill: { short: 'King of the Hill', title: '⛰️ King of the Hill', desc: 'At the start of each round, whoever has more units in the gold zone scores a point.' },
+  ctf:  { short: 'Capture the Flag', title: '🚩 Capture the Flag', desc: 'Steal the enemy flag and carry it back into your own start zone.' }
+};
+let objective = 'elim', objState = null, gameOver = false;
+function setObjective(name) {
+  if (!OBJECTIVES[name] || aiOn) return;
+  objective = name;
+  document.querySelectorAll('.md').forEach(el => el.classList.toggle('active', el.dataset.m === name));
+}
+function nearestWalkable(tx, ty, ok) {
+  let best = null, bd = 1e9;
+  cells.forEach(c => {
+    if (imp(c.x, c.y) || (ok && !ok(c))) return;
+    const d = Math.abs(c.x - tx) + Math.abs(c.y - ty) + (terr[k(c.x, c.y)] === 'forest' ? 1.5 : 0);
+    if (d < bd) { bd = d; best = c; }
+  });
+  return best ? { x: best.x, y: best.y } : { x: Math.round(tx), y: Math.round(ty) };
+}
+function initObjective() {
+  objState = null; gameOver = false;
+  if (objective === 'hill') {
+    const m = mapMargin();
+    const p = nearestWalkable((COLS - 1) / 2, (ROWS - 1) / 2, c => c.x >= m && c.x < COLS - m);
+    objState = { x: p.x, y: p.y, r: 1, score: { 1: 0, 2: 0 }, target: Math.max(3, Math.round(COLS / 3)) };
+  } else if (objective === 'ctf') {
+    const cy = (ROWS - 1) / 2, a = nearestWalkable(1, cy), b = nearestWalkable(COLS - 2, cy);
+    objState = { flags: { 1: { hx: a.x, hy: a.y, x: a.x, y: a.y, carrier: null }, 2: { hx: b.x, hy: b.y, x: b.x, y: b.y, carrier: null } }, score: { 1: 0, 2: 0 }, target: COLS <= 10 ? 2 : 3 };
+  }
+}
+function sanitizeObjective(o) {
+  if (!o || objective === 'elim') return null;
+  const sc = v => ({ 1: clampI(v && v[1], 0, 99, 0), 2: clampI(v && v[2], 0, 99, 0) });
+  if (objective === 'hill') return { x: clampI(o.x, 0, COLS - 1, 0), y: clampI(o.y, 0, ROWS - 1, 0), r: clampI(o.r, 1, 3, 1), score: sc(o.score), target: clampI(o.target, 1, 30, 5) };
+  const fl = f => ({ hx: clampI(f && f.hx, 0, COLS - 1, 0), hy: clampI(f && f.hy, 0, ROWS - 1, 0), x: clampI(f && f.x, 0, COLS - 1, 0), y: clampI(f && f.y, 0, ROWS - 1, 0), carrier: f && Number.isInteger(f.carrier) ? f.carrier : null });
+  return { flags: { 1: fl(o.flags && o.flags[1]), 2: fl(o.flags && o.flags[2]) }, score: sc(o.score), target: clampI(o.target, 1, 30, 3) };
+}
+function objNote(msg, snd) { log(msg); toast(msg); if (snd) playSound(snd); }
+function endObjective(won, msg) {
+  setBanner(won ? '🎉 YOU WIN! 🎉' : 'You lose');
+  playSound(won ? 'win' : 'lose');
+  showWinScreen(won, msg);
+}
+function scoreHill() {            // called at the start of every new round; false = the game just ended
+  if (objective !== 'hill' || !objState) return true;
+  const o = objState, inZ = u => dist(u, o) <= o.r;
+  const a = units.filter(u => u.pl === 1 && inZ(u)).length, b = units.filter(u => u.pl === 2 && inZ(u)).length;
+  if (a > b) { o.score[1]++; objNote('⛰️ You hold the hill: +1 (' + o.score[1] + '/' + o.target + ')', 'point'); }
+  else if (b > a) { o.score[2]++; objNote('⛰️ The enemy holds the hill: +1 (' + o.score[2] + '/' + o.target + ')', 'point'); }
+  else if (a || b) log('⚔️ The hill is contested — nobody scores');
+  if (o.score[1] >= o.target) { endObjective(true, 'You held the hill ' + o.target + ' times.'); return false; }
+  if (o.score[2] >= o.target) { endObjective(false, 'The enemy held the hill ' + o.target + ' times.'); return false; }
+  return true;
+}
+function objectiveSync() {        // flags follow their carriers, get picked up, returned and captured; derived from unit positions every render
+  if (objective !== 'ctf' || !objState || !battleStarted || gameOver) return;
+  const m = mapMargin(), F = objState.flags;
+  [1, 2].forEach(pl => {
+    const f = F[pl], foe = pl === 1 ? 2 : 1;
+    if (f.carrier != null) {
+      const c = units.find(u => u.id === f.carrier);
+      if (!c) { f.carrier = null; objNote('🚩 ' + (pl === 1 ? 'Your' : 'The enemy') + ' flag was dropped!', 'flag'); }
+      else { f.x = c.x; f.y = c.y; }
+    }
+    if (f.carrier == null) {
+      const grab = units.find(u => u.pl === foe && u.x === f.x && u.y === f.y);
+      if (grab) { f.carrier = grab.id; objNote(pl === 1 ? '🚩 The enemy has stolen your flag!' : '🚩 You have the enemy flag — bring it home!', 'flag'); }
+      else if (f.x !== f.hx || f.y !== f.hy) {
+        if (units.some(u => u.pl === pl && u.x === f.x && u.y === f.y)) { f.x = f.hx; f.y = f.hy; objNote('🚩 ' + (pl === 1 ? 'Your' : 'The enemy') + ' flag is back at base', 'flag'); }
+      }
+    }
+  });
+  [1, 2].forEach(pl => {          // a flag carried into the thief's start zone is a capture
+    const f = F[pl], foe = pl === 1 ? 2 : 1;
+    if (f.carrier == null) return;
+    const c = units.find(u => u.id === f.carrier);
+    if (!c) return;
+    const home = foe === 1 ? c.x < m : c.x >= COLS - m;
+    if (!home) return;
+    objState.score[foe]++; f.carrier = null; f.x = f.hx; f.y = f.hy;
+    objNote(foe === 1 ? '🏁 You captured the flag! (' + objState.score[1] + '/' + objState.target + ')' : '🏁 The enemy captured your flag! (' + objState.score[2] + '/' + objState.target + ')', 'capture');
+  });
+  if (objState.score[1] >= objState.target) endObjective(true, 'You captured the flag ' + objState.target + ' times.');
+  else if (objState.score[2] >= objState.target) endObjective(false, 'The enemy captured your flag ' + objState.target + ' times.');
+}
+function aiObjectiveGoal(u) {
+  if (!objState || !battleStarted || ['medic', 'miner', 'arty'].includes(u.ty)) return null;
+  if (objective === 'hill') return dist(u, objState) <= objState.r ? 'hold' : { x: objState.x, y: objState.y };
+  if (objective === 'ctf') {
+    const theirs = objState.flags[1], mine = objState.flags[2];
+    if (theirs.carrier === u.id) return { x: mine.hx, y: mine.hy, carry: true };
+    if (mine.carrier != null) return { x: mine.x, y: mine.y };                               // hunt the thief
+    const runners = units.filter(o => o.pl === 2 && !['medic', 'miner', 'arty', 'sniper', 'heavy'].includes(o.ty)).sort((a, b) => a.id - b.id);
+    if (mine.x !== mine.hx || mine.y !== mine.hy) {                                         // our flag lies on the ground: nearest runner returns it
+      const near = runners.slice().sort((a, b) => dist(a, mine) - dist(b, mine))[0];
+      if (near === u) return { x: mine.x, y: mine.y };
+    }
+    if (theirs.carrier == null && runners.slice(0, 2).includes(u)) return { x: theirs.x, y: theirs.y };   // two raiders go for their flag
+  }
+  return null;
+}
+function renderObjective() {
+  document.querySelectorAll('.objzone, .flagmark').forEach(e => e.remove());
+  if (!objState || !aiOn) return;
+  const b = document.getElementById('board');
+  if (objective === 'hill') {
+    cells.forEach(c => {
+      if (dist(c, objState) > objState.r) return;
+      const p = px(c.x, c.y), el = document.createElement('div');
+      el.className = 'objzone';
+      el.style.left = (p.x - CELL / 2) + 'px'; el.style.top = (p.y - CELL / 2) + 'px';
+      if (c.x === objState.x && c.y === objState.y) el.textContent = '👑';
+      b.appendChild(el);
+    });
+  } else if (objective === 'ctf') {
+    [1, 2].forEach(pl => {
+      const f = objState.flags[pl];
+      const mark = (x, y, cls, title) => {
+        const p = px(x, y), el = document.createElement('div');
+        el.className = 'flagmark tm' + pl + (cls ? ' ' + cls : '');
+        el.title = title;
+        el.style.left = (p.x - 4) + 'px'; el.style.top = (p.y - 27) + 'px';
+        el.innerHTML = '<svg width="26" height="30" viewBox="0 0 26 30"><path d="M5 2v26" style="stroke:#3a2a12;stroke-width:2.6;stroke-linecap:round"/><path d="M6 3 L22 8.5 L6 14Z" style="fill:var(--c);stroke:var(--d);stroke-width:1.5;stroke-linejoin:round"/></svg>';
+        b.appendChild(el);
+      };
+      if (f.x !== f.hx || f.y !== f.hy) mark(f.hx, f.hy, 'home', (pl === 1 ? 'Your' : 'Enemy') + ' flag base');
+      mark(f.x, f.y, '', (pl === 1 ? 'Your' : 'Enemy') + ' flag' + (f.carrier != null ? ' (being carried)' : ''));
+    });
+  }
+}
+function updateObjectiveCard() {
+  const el = document.getElementById('objCard');
+  if (!el) return;
+  if (!aiOn) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  const o = OBJECTIVES[objective];
+  const bar = (label, v, t, cls) => `<div class="obj-row"><span>${label}</span><div class="bar"><i class="${cls}" style="width:${Math.min(100, v / t * 100)}%"></i><b>${v}/${t}</b></div></div>`;
+  let html = `<div class="inner" style="padding-top:8px"><b class="t">${o.title}</b><div class="empty-note" style="padding-left:0">${o.desc}</div>`;
+  if (objState) html += bar('You', objState.score[1], objState.target, '') + bar('AI', objState.score[2], objState.target, 'low');
+  if (objective === 'ctf' && objState) {
+    const st = pl => {
+      const f = objState.flags[pl], c = f.carrier != null ? units.find(u => u.id === f.carrier) : null;
+      return c ? 'carried by ' + (c.pl === 1 ? 'your ' : 'an enemy ') + c.n : (f.x === f.hx && f.y === f.hy) ? 'at base' : 'dropped on the ground';
+    };
+    html += `<div class="empty-note" style="padding-left:0">Your flag: ${st(1)}<br>Enemy flag: ${st(2)}</div>`;
+  }
+  el.innerHTML = html + '</div>';
+}
+
+
+// ====================================================================
+// Mobile / touch: layout modes, slide-out menu, pinch-zoom, pan, tap-to-preview
+// ====================================================================
+let layoutPref = 'auto';
+try { layoutPref = localStorage.getItem('ts_layout') || 'auto'; } catch (e) { /* storage blocked */ }
+function isMobileLayout() {
+  if (layoutPref === 'mobile') return true;
+  if (layoutPref === 'desktop') return false;
+  return window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 800;
+}
+function applyLayoutMode() {
+  const m = isMobileLayout();
+  document.body.classList.toggle('mobile', m);
+  if (!m) closeDrawer();
+  if (typeof syncBar === 'function') syncBar();
+}
+function setLayoutPref(v) {
+  layoutPref = v;
+  try { localStorage.setItem('ts_layout', v); } catch (e) { /* ignore */ }
+  applyLayoutMode();
+  setTimeout(() => fitBoard(true), 60);
+}
+function openDrawer() { document.body.classList.add('drawer-open'); }
+function closeDrawer() { document.body.classList.remove('drawer-open'); }
+function toggleDrawer() { document.body.classList.toggle('drawer-open'); }
+function buzz(ms) { if (isMobileLayout() && opt('optHaptic') && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } } }
+
+// --- camera helpers ---
+function setZoomAt(cx, cy, z) {           // zoom keeping the point under (cx, cy) fixed
+  const c = document.querySelector('.board-container'), r = c.getBoundingClientRect();
+  const bx = (cx - r.left - panX) / zoom, by = (cy - r.top - panY) / zoom;
+  zoom = Math.max(0.4, Math.min(2.5, z));
+  panX = cx - r.left - bx * zoom; panY = cy - r.top - by * zoom;
+  applyPan();
+}
+function zoomBy(f) { const r = document.querySelector('.board-container').getBoundingClientRect(); setZoomAt(r.left + r.width / 2, r.top + r.height / 2, zoom * f); }
+function focusActive() { if (cur) focusOn(cur.x, cur.y, Math.max(zoom, 0.9)); else fitBoard(true); }
+function toggleFullscreen() {
+  const d = document, el = d.documentElement;
+  if (d.fullscreenElement || d.webkitFullscreenElement) { (d.exitFullscreen || d.webkitExitFullscreen).call(d); return; }
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) { toast('Fullscreen isn’t available here — use “Add to Home Screen”'); return; }
+  Promise.resolve(req.call(el)).catch(() => toast('Fullscreen isn’t available here — use “Add to Home Screen”'));
+}
+function cycleUnit(dir) {
+  if (cur && cur.pl === 2 && battleStarted) { toast('⏳ Wait for the enemy turn'); return; }
+  const mine = units.filter(u => u.pl === 1).sort((a, b) => a.id - b.id);
+  if (!mine.length) return;
+  const ready = mine.filter(u => u.ap > 0 || (cur && u.id === cur.id));
+  const list = ready.length ? ready : mine;
+  let i = cur ? list.findIndex(u => u.id === cur.id) : -1;
+  i = (i + dir + list.length) % list.length;
+  selectUnit(list[i].id);
+}
+function updateMobChip() {
+  const el = document.getElementById('mobChip');
+  if (!el) return;
+  if (!cur || (cur.pl === 2 && fogActive() && (refreshVision(), !isVisible(cur)))) {
+    el.innerHTML = '<span class="chip-note">' + (cur ? '⏳ Enemy turn…' : battleStarted ? 'Round over — End Turn' : aiOn ? 'Tap ☰ to deploy units' : 'Tap ☰ for the menu') + '</span>';
+    return;
+  }
+  const pct = Math.max(0, cur.hp / cur.mx * 100);
+  el.innerHTML = `<button class="chip-nav" onclick="event.stopPropagation();cycleUnit(-1)">◀</button>` +
+    `<span class="chip-ico tm${cur.pl}">${unitSVG(cur.ty)}</span>` +
+    `<span class="chip-main"><b>${cur.n} · ${cur.hp}/${cur.mx}</b><span class="chip-bar"><i style="width:${pct}%"></i></span></span>` +
+    `<span class="chip-ap">${'●'.repeat(Math.max(0, cur.ap))}<s>${'●'.repeat(Math.max(0, cur.maxAp - cur.ap))}</s></span>` +
+    `<button class="chip-nav" onclick="event.stopPropagation();cycleUnit(1)">▶</button>`;
+}
+
+// --- tap to preview, tap again to do it (touch only) ---
+let lastPointerType = 'mouse', tapUnitId = null, tapUnitAt = 0, tapCellKey = null, tapCellAt = 0, suppressClickUntil = 0;
+document.addEventListener('pointerdown', e => { lastPointerType = e.pointerType || 'mouse'; }, true);
+function touchTap(u, el) {
+  if (lastPointerType === 'mouse' || !opt('optTapConfirm')) return false;
+  if (u.pl === 1 && !(attackMode || healMode)) return false;      // tapping your own unit just selects it
+  const now = performance.now(), r = el.getBoundingClientRect();
+  if (tapUnitId !== u.id || now - tapUnitAt > 4000) {
+    tapUnitId = u.id; tapUnitAt = now; tapCellKey = null; clearHover();
+    showUnitTip(u, { clientX: r.right, clientY: r.top });
+    if (!attackMode && !healMode) showHoverRadial(u);
+    return true;                                                   // first tap: inspect, with hit chances
+  }
+  tapUnitId = null; hideUnitTip();
+  return false;                                                    // second tap: act
+}
+function touchCellTap(x, y) {
+  if (lastPointerType === 'mouse' || !opt('optTapConfirm')) return false;
+  hideUnitTip(); hideHoverRadial(); tapUnitId = null;
+  if (paintMode || !cur || cur.pl !== 1 || attackMode || healMode || cur.ap < 1) { tapCellKey = null; return false; }
+  const key = k(x, y), now = performance.now();
+  refreshVision();
+  if (!moveCells(cur, { overrun: canRamNow(cur), fog: true }).has(key)) { tapCellKey = null; clearHover(); return false; }
+  if (tapCellKey !== key || now - tapCellAt > 6000) { tapCellKey = key; tapCellAt = now; clearHover(); onHover(x, y); return true; }   // first tap: show the path and AP cost
+  tapCellKey = null; clearHover();
+  return false;                                                    // second tap: move
+}
+
+// --- one finger pans (or paints in the map creator), two fingers pinch-zoom and pan ---
+(function setupTouch() {
+  const bc = document.querySelector('.board-container');
+  const touches = new Map();
+  let g = null;
+  const bpoint = (cx, cy) => { const r = bc.getBoundingClientRect(); return { x: (cx - r.left - panX) / zoom, y: (cy - r.top - panY) / zoom }; };
+  const cellAtPoint = (cx, cy) => { const el = document.elementFromPoint(cx, cy); const c = el && el.closest && el.closest('.cell'); return c ? { x: +c.dataset.x, y: +c.dataset.y } : null; };
+  bc.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') return;
+    if (e.target.closest && e.target.closest('.mob, #mobHud, #creatorBar, #setupBar, #cancelBtn, .radial-item')) return;   // buttons float above the map and are not map gestures
+    e.preventDefault();
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 1) {
+      g = { mode: 'one', sx: e.clientX, sy: e.clientY, panX0: panX, panY0: panY, moved: false, paint: false };
+      const c = cellAtPoint(e.clientX, e.clientY);
+      if (paintMode && !battleStarted && c) { pushPaintUndo(); painting = true; g.paint = true; applyPaint(c.x, c.y); }
+    } else if (touches.size === 2) {
+      if (painting) { painting = false; render(); }
+      const [a, b] = [...touches.values()], mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, bp = bpoint(mx, my);
+      g = { mode: 'two', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: zoom, bx: bp.x, by: bp.y, moved: true };
+    }
+  });
+  bc.addEventListener('pointermove', e => {
+    if (e.pointerType === 'mouse' || !touches.has(e.pointerId) || !g) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (g.mode === 'one' && touches.size === 1) {
+      const dx = e.clientX - g.sx, dy = e.clientY - g.sy;
+      if (!g.moved && Math.hypot(dx, dy) > 10) g.moved = true;
+      if (g.paint) { const c = cellAtPoint(e.clientX, e.clientY); if (c) applyPaint(c.x, c.y); }
+      else if (g.moved) { panX = g.panX0 + dx; panY = g.panY0 + dy; applyPan(); }
+    } else if (g.mode === 'two' && touches.size >= 2) {
+      const [a, b] = [...touches.values()], d = Math.hypot(a.x - b.x, a.y - b.y) || 1, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      const r = bc.getBoundingClientRect();
+      zoom = Math.max(0.4, Math.min(2.5, g.z0 * d / g.d0));
+      panX = mx - r.left - g.bx * zoom; panY = my - r.top - g.by * zoom;
+      applyPan();
+    }
+  });
+  const end = e => {
+    if (e.pointerType === 'mouse' || !touches.has(e.pointerId)) return;
+    touches.delete(e.pointerId);
+    if (g && (g.moved || g.mode === 'two')) suppressClickUntil = performance.now() + 350;   // a drag must not count as a tap
+    if (g && g.paint && touches.size === 0) { painting = false; render(); }
+    if (touches.size === 0) g = null;
+    else if (touches.size === 1) { const p = [...touches.values()][0]; g = { mode: 'one', sx: p.x, sy: p.y, panX0: panX, panY0: panY, moved: true, paint: false }; }
+  };
+  bc.addEventListener('pointerup', end);
+  bc.addEventListener('pointercancel', end);
+  bc.addEventListener('click', e => { if (performance.now() < suppressClickUntil && !(e.target.closest && e.target.closest('.mob, #mobHud, #creatorBar, #setupBar, #cancelBtn, .radial-item'))) { e.stopPropagation(); e.preventDefault(); } }, true);
+  bc.addEventListener('contextmenu', e => { if (isMobileLayout()) e.preventDefault(); });
+})();
+
+// --- slide-out menu: swipe in from the left edge, swipe it left (or tap outside) to close ---
+(function setupDrawerSwipes() {
+  const edge = document.getElementById('edgeSwipe'), sb = document.querySelector('.sidebar');
+  let a = null, b = null;
+  edge.addEventListener('pointerdown', e => { a = { x: e.clientX }; try { edge.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } });
+  edge.addEventListener('pointermove', e => { if (a && e.clientX - a.x > 45) { openDrawer(); a = null; } });
+  edge.addEventListener('pointerup', () => { a = null; });
+  edge.addEventListener('pointercancel', () => { a = null; });
+  sb.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') b = { x: e.clientX }; });
+  sb.addEventListener('pointermove', e => { if (b && b.x - e.clientX > 70) { closeDrawer(); b = null; } });
+  sb.addEventListener('pointerup', () => { b = null; });
+  sb.addEventListener('pointercancel', () => { b = null; });
+})();
+document.getElementById('optLayout').value = layoutPref;
+applyLayoutMode();
+
+let bgMusic = null;
+const PLAYLIST = ['Patrol at Dusk.mp3', 'Patrol at Breakfast.mp3'];   // add more file names here, they play in this order
+let trackIdx = 0, trackFails = 0;
+function loadTrack(i) {
+  trackIdx = i % PLAYLIST.length;                                    // wraps back to the first song after the last
+  bgMusic.src = MUSIC_BASE + encodeURIComponent(PLAYLIST[trackIdx]);
+}
+function initMusic() {
+  bgMusic = new Audio();
+  bgMusic.loop = false;                                              // must be false, otherwise 'ended' never fires
+  bgMusic.volume = 0.4;
+  loadTrack(0);
+  bgMusic.addEventListener('ended', () => {                          // song finished -> start the next one
+    loadTrack(trackIdx + 1);
+    bgMusic.play().catch(() => {});
+  });
+  bgMusic.addEventListener('playing', () => { trackFails = 0; });
+  bgMusic.addEventListener('error', () => {                          // a file is missing -> skip it
+    trackFails++;
+    if (trackFails >= PLAYLIST.length) {                             // none of them load -> grey out the checkbox
+      const cb = document.getElementById('musicOn');
+      if (cb) { cb.checked = false; cb.disabled = true; cb.title = 'Could not load music from ' + MUSIC_BASE; }
+      bgMusic = null;
+      return;
+    }
+    loadTrack(trackIdx + 1);
+    if (document.getElementById('musicOn').checked) bgMusic.play().catch(() => {});
+  });
+  document.addEventListener('click', () => {
+    if (bgMusic && document.getElementById('musicOn').checked && bgMusic.paused) {
+      bgMusic.play().catch(() => {});
+    }
+  }, { once: true });
+}
+function toggleMusic() {
+  if (!bgMusic) return;
+  if (document.getElementById('musicOn').checked) bgMusic.play().catch(() => {});
+  else bgMusic.pause();
+}
+function setMusicVol(v) {
+  if (bgMusic) bgMusic.volume = v / 100;
+}
+function syncBar() {
+  const bar = document.getElementById('bottomBar');
+  document.body.style.paddingBottom = (bar.offsetHeight + 4) + 'px';
+}
+window.addEventListener('resize', syncBar);
+syncBar();
+initMusic();
+init();
+bootGame();
+</script>
+</body>
+</html>
